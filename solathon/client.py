@@ -614,10 +614,10 @@ class Client:
             if "error" in res:
                 raise RPCRequestError(f"Failed to fetch data from RPC endpoint. Error {res['error']['code']}: {res['error']['message']}")
             
-            if isinstance(res['result'], dict) or isinstance(res['result'], list) or isinstance(res['result'], str) or res['result'] == None:
+            if isinstance(res['result'], dict) or isinstance(res['result'], list) or isinstance(res['result'], str) or isinstance(res['result'], int) or res['result'] == None:
                 return res['result']
             else:
-                raise RPCRequestError(f"Invalid response from RPC endpoint. Expected types dict | list | str, got {type(res['result']).__name__}")
+                raise RPCRequestError(f"Invalid response from RPC endpoint. Expected types dict | list | str | int, got {type(res['result']).__name__}")
             
         return res
 
