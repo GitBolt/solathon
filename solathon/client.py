@@ -12,6 +12,8 @@ from .core.types import (
     Commitment,
     LargestAccounts,
     LargestAccountsType,
+    LargestTokenAccounts,
+    LargestTokenAccountsType,
     PubKeyIdentity,
     PubKeyIdentityType,
     RPCResponse,
@@ -414,6 +416,21 @@ class Client:
         response = self.build_and_send_request("getLargestAccounts", [None])
         if self.clean_response:
             return [LargestAccounts(account) for account in response["value"]]
+        return response
+    
+    def get_largest_token_accounts(
+        self, mint: Text
+    ) -> RPCResponse[List[LargestTokenAccountsType]] | List[LargestTokenAccounts]:
+        """
+        Returns the token largest accounts.
+
+        Returns:
+            RPCResponse: The response from the RPC endpoint.
+        """
+
+        response = self.build_and_send_request("getTokenLargestAccounts", [mint])
+        if self.clean_response:
+            return [LargestTokenAccounts(account) for account in response["value"]]
         return response
 
     def get_leader_schedule(

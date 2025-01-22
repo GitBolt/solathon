@@ -69,6 +69,27 @@ class LargestAccounts:
     def __init__(self, response: LargestAccountsType) -> None:
         self.lamports = response['lamports']
         self.address = response['address']
+        
+class LargestTokenAccountsType(TypedDict):
+    '''
+    JSON Response type of Largest Token Accounts received by RPC
+    '''
+    address: set
+    amount: int
+    decimals: int
+    uiAmount: float
+    uiAmountString: str
+
+class LargestTokenAccounts:
+    '''
+    Convert Largest Token Accounts JSON to Class
+    '''
+    def __init__(self, response: LargestTokenAccountsType) -> None:
+        self.address = response['address']
+        self.amount = response['amount']
+        self.decimals = response['decimals']
+        self.uiAmount = response['uiAmount']
+        self.uiAmountString = response['uiAmountString']
 
 class RecentPerformanceSamplesType(TypedDict):
     '''
