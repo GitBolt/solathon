@@ -42,5 +42,36 @@ balance = client.get_balance(public_key)
 print(balance)
 ```
 
+## ⏱ Handling Congestion with Compute Budget Instructions
+
+On Solana, transaction fees are based on compute units consumed. During high network load, your transaction may fail or be delayed unless additional compute resources are allocated.
+
+You can manually increase the compute unit limit and the price per unit using Solathon's `ComputeBudgetProgram`. This is especially useful when the network is congested.
+
+```python
+from solathon import Client, Transaction, PublicKey, Keypair
+from solathon.core.instructions import transfer
+from solathon.core import ComputeBudgetProgram
+
+client = Client("https://api.devnet.solana.com")
+sender = Keypair()
+receiver = PublicKey("DESTINATION_PUBLIC_KEY")
+
+# Optional: Increase compute resources
+compute_limit_ix = ComputeBudgetProgram.set_compute_unit_limit(1_000_000)
+compute_price_ix = ComputeBudgetProgram.set_compute_unit_price(1)  # micro-lamports per unit
+
+# Transfer instruction
+transfer_ix = transfer(from_public_key=sender.public_key, to_public_key=receiver, lamports=10_000)
+
+# Create and send transaction
+tx = Transaction(
+    instructions=[compute_limit_ix, compute_price_ix, transfer_ix],
+    signers=[sender]
+)
+result = client.send_transaction(tx)
+print("Transaction signature:", result)
+```
+
 # 🗃️ Contribution
 Drop a pull request for anything which seems wrong or can be improved, could be a small typo or an entirely new feature! Checkout [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to proceed.
