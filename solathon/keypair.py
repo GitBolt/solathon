@@ -66,6 +66,6 @@ class Keypair:
             data = json.load(f)
 
         private_key_bytes = bytes(data[:32])
-        private_key = base58.b58encode(private_key_bytes)
+        private_key = base58.b58encode(private_key_bytes).decode('utf-8')
         keypair = Keypair.from_private_key(private_key)
         return keypair
