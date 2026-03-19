@@ -25,11 +25,16 @@ class HTTPClient:
             ),
         }
         self.request_id = 0
-        self.client = httpx.Client()
+        self.client = httpx.Client(timeout=30.0)
 
     def send(self, data: Dict[str, Any]) -> RPCResponse:
         res = self.client.post(
                 url=self.endpoint, headers=self.headers, json=data)
+        return res.json()
+
+    def send_batch(self, batch: list[Dict[str, Any]]) -> list[RPCResponse]:
+        res = self.client.post(
+                url=self.endpoint, headers=self.headers, json=batch)
         return res.json()
 
     def build_data(self, method: str, params: List[Any]) -> Dict[str, Any]:
@@ -58,7 +63,6 @@ class AsyncHTTPClient:
     """Asynchronous HTTP Client to interact with Solana JSON RPC"""
 
     def __init__(self, endpoint: str):
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
         self.endpoint = endpoint
         version = sys.version_info
         self.headers = {
@@ -69,12 +73,16 @@ class AsyncHTTPClient:
             ),
         }
         self.request_id = 0
-        self.client = httpx.AsyncClient()
-        
+        self.client = httpx.AsyncClient(timeout=30.0)
 
     async def send(self, data: Dict[str, Any]) -> RPCResponse:
         res = await self.client.post(
                 url=self.endpoint, headers=self.headers, json=data)
+        return res.json()
+
+    async def send_batch(self, batch: list[Dict[str, Any]]) -> list[RPCResponse]:
+        res = await self.client.post(
+                url=self.endpoint, headers=self.headers, json=batch)
         return res.json()
 
     def build_data(self, method: str, params: List[Any]) -> Dict[str, Any]:

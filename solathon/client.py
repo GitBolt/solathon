@@ -49,63 +49,44 @@ from .core.types import (
     TransactionElementType,
 )
 
-ENDPOINTS = (
-    "https://api.mainnet-beta.solana.com",
-    "https://api.devnet.solana.com",
-    "https://api.testnet.solana.com",
-)
-
 
 class Client:
     def __init__(
         self, endpoint: Text, local: bool = False, clean_response: bool = True
     ):
         """
-        Initializes a new instance of the Client class.
+        Initializes the Solana RPC client.
 
         Args:
-            endpoint (str): The endpoint to connect to.
-            local (bool, optional): Whether to use a local development endpoint. Defaults to False.
-            clean_response (bool, optional): Whether to clean the response from the RPC endpoint. Defaults to True.
-
-        Raises:
-            ValueError: If the endpoint is not valid and local is False.
+            endpoint (str): The RPC endpoint URL (any valid HTTP/HTTPS URL).
+            local (bool, optional): Whether to skip endpoint validation. Defaults to False.
+            clean_response (bool, optional): Whether to unwrap RPC responses. Defaults to True.
         """
-        if not local and endpoint not in ENDPOINTS:
+        if not local and not endpoint.startswith(("http://", "https://")):
             raise ValueError(
-                "Invalid cluster RPC endpoint provided"
-                " (Refer to https://docs.solana.com/cluster/rpc-endpoints)."
-                " Use the argument local to use a local development endpoint."
+                "Invalid RPC endpoint. Must be a valid HTTP/HTTPS URL."
             )
         self.http = HTTPClient(endpoint)
         self.endpoint = endpoint
         self.clean_response = clean_response
 
     def refresh_http(self) -> None:
-        """
-        Refreshes the HTTP client.
-        """
         self.http.refresh()
+
+    # ========================================================================
+    # Account Methods
+    # ========================================================================
 
     def get_account_info(
         self, public_key: PublicKey | Text, commitment: Optional[Commitment] = None
     ) -> RPCResponse[AccountInfoType] | AccountInfo:
-        """
-        Returns all the account info for the specified public key.
-
-        Args:
-            public_key (PublicKey | str): The public key of the account.
-            commitment (Commitment, optional): The level of commitment desired when querying state.
-
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
-        commitment = validate_commitment(commitment) if commitment else None
-        response = self.build_and_send_request("getAccountInfo", [public_key, {
-            "encoding": "base64"
-        }])
+        """Returns all account info for the specified public key."""
+        config: Dict[str, Any] = {"encoding": "base64"}
+        if commitment:
+            config.update(validate_commitment(commitment))
+        response = self.build_and_send_request("getAccountInfo", [str(public_key), config])
         if self.clean_response:
-            if response["value"] == None:
+            if response["value"] is None:
                 raise RPCRequestError(f"Account details not found: {public_key}")
             return AccountInfo(response["value"])
         return response
@@ -113,34 +94,78 @@ class Client:
     def get_balance(
         self, public_key: PublicKey | Text, commitment: Optional[Commitment] = None
     ) -> RPCResponse[int] | int:
-        """
-        Returns the balance of the specified public key.
-
-        Args:
-            public_key (PublicKey | Text): The public key of the account.
-            commitment (Commitment, optional): The level of commitment desired when querying state.
-
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
-        commitment = validate_commitment(commitment) if commitment else None
-        response = self.build_and_send_request("getBalance", [public_key, commitment])
+        """Returns the lamport balance of the account."""
+        params: list = [str(public_key)]
+        if commitment:
+            params.append(validate_commitment(commitment))
+        response = self.build_and_send_request("getBalance", params)
         if self.clean_response:
             return response["value"]
-
         return response
 
-    def get_block(self, slot: int) -> RPCResponse[BlockType] | Block:
-        """
-        Returns the block at the specified slot.
+    def get_multiple_accounts(
+        self, pubkeys: List[str], commitment: Optional[Commitment] = None
+    ) -> RPCResponse[List[AccountInfoType]] | List[AccountInfo]:
+        """Returns account info for a list of public keys."""
+        config: Dict[str, Any] = {"encoding": "base64"}
+        if commitment:
+            config.update(validate_commitment(commitment))
+        response = self.build_and_send_request("getMultipleAccounts", [pubkeys, config])
+        if self.clean_response:
+            return [AccountInfo(account) for account in response["value"] if account]
+        return response
 
-        Args:
-            slot (int): The slot of the block.
+    def get_program_accounts(
+        self, public_key: PublicKey | Text, commitment: Optional[Commitment] = None,
+        filters: Optional[List[Dict]] = None
+    ) -> RPCResponse[List[ProgramAccountType]] | List[ProgramAccount]:
+        """Returns all accounts owned by the specified program."""
+        config: Dict[str, Any] = {"encoding": "base64"}
+        if commitment:
+            config.update(validate_commitment(commitment))
+        if filters:
+            config["filters"] = filters
+        response = self.build_and_send_request("getProgramAccounts", [str(public_key), config])
+        if self.clean_response:
+            return [ProgramAccount(account) for account in response]
+        return response
 
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
-        response = self.build_and_send_request("getBlock", [slot])
+    def get_largest_accounts(
+        self, commitment: Optional[Commitment] = None, filter: Optional[Literal["circulating", "nonCirculating"]] = None
+    ) -> RPCResponse[List[LargestAccountsType]] | List[LargestAccounts]:
+        """Returns the 20 largest accounts by lamport balance."""
+        config: Dict[str, Any] = {}
+        if commitment:
+            config.update(validate_commitment(commitment))
+        if filter:
+            config["filter"] = filter
+        response = self.build_and_send_request("getLargestAccounts", [config] if config else [None])
+        if self.clean_response:
+            return [LargestAccounts(account) for account in response["value"]]
+        return response
+
+    def get_minimum_balance_for_rent_exemption(
+        self, data_length: int, commitment: Optional[Commitment] = None
+    ) -> RPCResponse[int] | int:
+        """Returns minimum balance required to make account rent-exempt."""
+        params: list = [data_length]
+        if commitment:
+            params.append(validate_commitment(commitment))
+        return self.build_and_send_request("getMinimumBalanceForRentExemption", params)
+
+    # ========================================================================
+    # Block Methods
+    # ========================================================================
+
+    def get_block(
+        self, slot: int, commitment: Optional[Commitment] = None,
+        max_supported_transaction_version: Optional[int] = 0
+    ) -> RPCResponse[BlockType] | Block:
+        """Returns identity and transaction info about a confirmed block."""
+        config: Dict[str, Any] = {"maxSupportedTransactionVersion": max_supported_transaction_version}
+        if commitment:
+            config.update(validate_commitment(commitment))
+        response = self.build_and_send_request("getBlock", [slot, config])
         if self.clean_response:
             return Block(response)
         return response
@@ -148,32 +173,20 @@ class Client:
     def get_block_height(
         self, commitment: Optional[Commitment] = None
     ) -> RPCResponse[int] | int:
-        """
-        Returns the current block height.
-
-        Args:
-            commitment (Commitment, optional): The level of commitment desired when querying state.
-
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
-        commitment = validate_commitment(commitment) if commitment else None
-        return self.build_and_send_request("getBlockHeight", [commitment])
+        """Returns the current block height."""
+        params: list = []
+        if commitment:
+            params.append(validate_commitment(commitment))
+        return self.build_and_send_request("getBlockHeight", params if params else [None])
 
     def get_block_production(
         self, commitment: Optional[Commitment] = None
     ) -> RPCResponse[BlockProductionType] | BlockProduction:
-        """
-        Returns the block production information.
-
-        Args:
-            commitment (Commitment, optional): The level of commitment desired when querying state.
-
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
-        commitment = validate_commitment(commitment) if commitment else None
-        response = self.build_and_send_request("getBlockProduction", [commitment])
+        """Returns recent block production information."""
+        params: list = []
+        if commitment:
+            params.append(validate_commitment(commitment))
+        response = self.build_and_send_request("getBlockProduction", params if params else [None])
         if self.clean_response:
             return BlockProduction(response["value"])
         return response
@@ -181,81 +194,64 @@ class Client:
     def get_block_commitment(
         self, block: int
     ) -> RPCResponse[BlockCommitmentType] | BlockCommitment:
-        """
-        Returns the block commitment information for the specified block.
-
-        Args:
-            block (int): The block number.
-
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
+        """Returns commitment for a particular block."""
         response = self.build_and_send_request("getBlockCommitment", [block])
         if self.clean_response:
             return BlockCommitment(response)
         return response
 
     def get_blocks(
-        self,
-        start_slot: int,
-        end_slot: int | None = None,
+        self, start_slot: int, end_slot: int | None = None,
         commitment: Optional[Commitment] = None,
     ) -> RPCResponse[List[int]] | List[int]:
-        """
-        Returns the blocks in the specified range.
-
-        Args:
-            start_slot (int): The start slot.
-            end_slot (int | None, optional): The end slot. Defaults to None.
-            commitment (Commitment, optional): The level of commitment desired when querying state.
-
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
-        commitment = validate_commitment(commitment) if commitment else None
-        params = [start_slot]
+        """Returns a list of confirmed blocks between two slots."""
+        params: list = [start_slot]
         if end_slot:
             params.append(end_slot)
-        params.append(commitment)
-
+        if commitment:
+            params.append(validate_commitment(commitment))
         return self.build_and_send_request("getBlocks", params)
 
     def get_blocks_with_limit(
         self, start_slot: int, limit: int
     ) -> RPCResponse[List[int]] | List[int]:
-        """
-        Returns the blocks in the specified range with a limit.
-
-        Args:
-            start_slot (int): The start slot.
-            limit (int): The limit.
-
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
+        """Returns a list of confirmed blocks starting at the given slot."""
         return self.build_and_send_request("getBlocksWithLimit", [start_slot, limit])
 
     def get_block_time(self, block: int) -> RPCResponse[int] | int:
-        """
-        Returns the block time for the specified block.
-
-        Args:
-            block (int): The block number.
-
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
+        """Returns the estimated production time of a block."""
         return self.build_and_send_request("getBlockTime", [block])
 
-    def get_cluster_nodes(
-        self,
-    ) -> RPCResponse[List[ClusterNodeType]] | List[ClusterNode]:
-        """
-        Returns the cluster nodes.
+    def get_latest_blockhash(
+        self, commitment: Optional[Commitment] = None
+    ) -> RPCResponse[BlockHashType] | BlockHash:
+        """Returns the latest blockhash."""
+        params: list = []
+        if commitment:
+            params.append(validate_commitment(commitment))
+        response = self.build_and_send_request("getLatestBlockhash", params if params else [None])
+        if self.clean_response:
+            return BlockHash(response["value"])
+        return response
 
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
+    def is_blockhash_valid(
+        self, blockhash: Text, commitment: Optional[Commitment] = None
+    ) -> RPCResponse[bool] | bool:
+        """Returns whether a blockhash is still valid."""
+        params: list = [blockhash]
+        if commitment:
+            params.append(validate_commitment(commitment))
+        response = self.build_and_send_request("isBlockhashValid", params)
+        if self.clean_response:
+            return response["value"]
+        return response
+
+    # ========================================================================
+    # Cluster Methods
+    # ========================================================================
+
+    def get_cluster_nodes(self) -> RPCResponse[List[ClusterNodeType]] | List[ClusterNode]:
+        """Returns information about all nodes participating in the cluster."""
         response = self.build_and_send_request("getClusterNodes", [None])
         if self.clean_response:
             return [ClusterNode(node) for node in response]
@@ -264,527 +260,404 @@ class Client:
     def get_epoch_info(
         self, commitment: Optional[Commitment] = None
     ) -> RPCResponse[EpochType] | Epoch:
-        """
-        Returns the epoch information.
-
-        Args:
-            commitment (Commitment, optional): The level of commitment desired when querying state.
-
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
-        commitment = validate_commitment(commitment) if commitment else None
-        response = self.build_and_send_request("getEpochInfo", [commitment])
+        """Returns information about the current epoch."""
+        params: list = []
+        if commitment:
+            params.append(validate_commitment(commitment))
+        response = self.build_and_send_request("getEpochInfo", params if params else [None])
         if self.clean_response:
             return Epoch(response)
         return response
 
     def get_epoch_schedule(self) -> RPCResponse[EpochScheduleType] | EpochSchedule:
-        """
-        Returns the epoch schedule.
-
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
+        """Returns the epoch schedule."""
         response = self.build_and_send_request("getEpochSchedule", [None])
         if self.clean_response:
             return EpochSchedule(response)
         return response
 
-    def get_fee_for_message(
-        self, message: Text, commitment: Optional[Commitment] = None
-    ) -> RPCResponse[int] | int:
-        """
-        Returns the fee for the specified message.
-
-        Args:
-            message (str): The message.
-            commitment (Commitment, optional): The level of commitment desired when querying state.
-
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
-        commitment = validate_commitment(commitment) if commitment else None
-        response = self.build_and_send_request(
-            "getFeeForMessage", [message, commitment]
-        )
-        if self.clean_response:
-            return response["value"]
-        return response
-
-
     def get_first_available_block(self) -> RPCResponse[int] | int:
-        """
-        Returns the first available block.
-
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
+        """Returns the slot of the lowest confirmed block."""
         return self.build_and_send_request("getFirstAvailableBlock", [None])
 
     def get_genesis_hash(self) -> RPCResponse[str] | str:
-        """
-        Returns the genesis hash.
-
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
+        """Returns the genesis hash."""
         return self.build_and_send_request("getGenesisHash", [None])
 
     def get_health(self) -> RPCResponse[Literal["ok"]] | Literal["ok"]:
-        """
-        Returns the health.
-
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
+        """Returns the current health of the node."""
         return self.build_and_send_request("getHealth", [None])
 
     def get_identity(self) -> RPCResponse[PubKeyIdentityType] | PubKeyIdentity:
-        """
-        Returns the identity.
-
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
+        """Returns the identity pubkey of the current node."""
         response = self.build_and_send_request("getIdentity", [None])
         if self.clean_response:
             return PubKeyIdentity(response)
         return response
 
+    def get_version(self) -> RPCResponse[Dict[str, Any]] | Dict[str, Any]:
+        """Returns the current Solana version running on the node."""
+        return self.build_and_send_request("getVersion", [None])
+
+    def get_highest_snapshot_slot(self) -> RPCResponse[Dict[str, Any]] | Dict[str, Any]:
+        """Returns the highest slot info that the node has snapshots for."""
+        return self.build_and_send_request("getHighestSnapshotSlot", [None])
+
+    def get_leader_schedule(
+        self, slot: Optional[int] = None, commitment: Optional[Commitment] = None
+    ) -> RPCResponse[Dict[str, List[int]]] | Dict[str, List[int]]:
+        """Returns the leader schedule for an epoch."""
+        params: list = [slot]
+        if commitment:
+            params.append(validate_commitment(commitment))
+        return self.build_and_send_request("getLeaderSchedule", params)
+
+    def get_max_retransmit_slot(self) -> RPCResponse[int] | int:
+        """Returns the max slot seen from retransmit stage."""
+        return self.build_and_send_request("getMaxRetransmitSlot", [None])
+
+    def get_max_shred_insert_slot(self) -> RPCResponse[int] | int:
+        """Returns the max slot seen from after shred insert."""
+        return self.build_and_send_request("getMaxShredInsertSlot", [None])
+
+    def get_slot(self, commitment: Optional[Commitment] = None) -> RPCResponse[int] | int:
+        """Returns the current slot."""
+        params: list = []
+        if commitment:
+            params.append(validate_commitment(commitment))
+        return self.build_and_send_request("getSlot", params if params else [None])
+
+    def get_slot_leader(self, commitment: Optional[Commitment] = None) -> RPCResponse[str] | str:
+        """Returns the current slot leader."""
+        params: list = []
+        if commitment:
+            params.append(validate_commitment(commitment))
+        return self.build_and_send_request("getSlotLeader", params if params else [None])
+
+    def get_slot_leaders(
+        self, start_slot: int, limit: int
+    ) -> RPCResponse[List[str]] | List[str]:
+        """Returns the slot leaders for a given slot range."""
+        return self.build_and_send_request("getSlotLeaders", [start_slot, limit])
+
+    def minimum_ledger_slot(self) -> RPCResponse[int] | int:
+        """Returns the lowest slot that the node has info about in its ledger."""
+        return self.build_and_send_request("minimumLedgerSlot", [None])
+
+    def get_vote_accounts(
+        self, commitment: Optional[Commitment] = None
+    ) -> RPCResponse[Dict[str, Any]] | Dict[str, Any]:
+        """Returns the account info and associated stake for all voting accounts."""
+        params: list = []
+        if commitment:
+            params.append(validate_commitment(commitment))
+        return self.build_and_send_request("getVoteAccounts", params if params else [None])
+
+    # ========================================================================
+    # Fee Methods
+    # ========================================================================
+
+    def get_fee_for_message(
+        self, message: Text, commitment: Optional[Commitment] = None
+    ) -> RPCResponse[int] | int:
+        """Returns the fee for a given message (base64-encoded)."""
+        params: list = [message]
+        if commitment:
+            params.append(validate_commitment(commitment))
+        response = self.build_and_send_request("getFeeForMessage", params)
+        if self.clean_response:
+            return response["value"]
+        return response
+
+    def get_recent_prioritization_fees(
+        self, addresses: Optional[List[Text]] = None
+    ) -> RPCResponse[List[Dict[str, Any]]] | List[Dict[str, Any]]:
+        """Returns recent prioritization fees from recent blocks."""
+        params: list = []
+        if addresses:
+            params.append(addresses)
+        return self.build_and_send_request("getRecentPrioritizationFees", params if params else [None])
+
+    # ========================================================================
+    # Inflation Methods
+    # ========================================================================
+
     def get_inflation_governor(
         self, commitment: Optional[Commitment] = None
     ) -> RPCResponse[InflationGovernorType] | InflationGovernor:
-        """
-        Returns the inflation governor.
-
-        Args:
-            commitment (Commitment, optional): The level of commitment desired when querying state.
-
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
-        commitment = validate_commitment(commitment) if commitment else None
-        response = self.build_and_send_request("getInflationGovernor", [commitment])
+        """Returns the current inflation governor."""
+        params: list = []
+        if commitment:
+            params.append(validate_commitment(commitment))
+        response = self.build_and_send_request("getInflationGovernor", params if params else [None])
         if self.clean_response:
             return InflationGovernor(response)
         return response
 
     def get_inflation_rate(self) -> RPCResponse[InflationRateType] | InflationRate:
-        """
-        Returns the inflation rate.
-
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
+        """Returns the specific inflation values for the current epoch."""
         response = self.build_and_send_request("getInflationRate", [None])
         if self.clean_response:
             return InflationRate(response)
         return response
 
     def get_inflation_reward(
-        self, addresses: List[Text], commitment: Optional[Commitment] = None
+        self, addresses: List[Text], commitment: Optional[Commitment] = None,
+        epoch: Optional[int] = None
     ) -> RPCResponse[List[InflationRewardType]] | List[InflationReward]:
-        """
-        Returns the inflation reward for the specified addresses.
-
-        Args:
-            addresses (List[str]): The addresses.
-            commitment (Commitment, optional): The level of commitment desired when querying state.
-
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
-        commitment = validate_commitment(commitment) if commitment else None
-        addresses.append(commitment)
-        response = self.build_and_send_request("getInflationReward", addresses)
+        """Returns the inflation / staking reward for a list of addresses."""
+        params: list = [addresses]
+        config: Dict[str, Any] = {}
+        if commitment:
+            config.update(validate_commitment(commitment))
+        if epoch is not None:
+            config["epoch"] = epoch
+        if config:
+            params.append(config)
+        response = self.build_and_send_request("getInflationReward", params)
         if self.clean_response:
-            return [InflationReward(reward) for reward in response]
+            return [InflationReward(reward) for reward in response if reward]
         return response
 
-    def get_largest_accounts(
-        self,
-    ) -> RPCResponse[List[LargestAccountsType]] | List[LargestAccounts]:
-        """
-        Returns the largest accounts.
+    # ========================================================================
+    # Supply Methods
+    # ========================================================================
 
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
-        response = self.build_and_send_request("getLargestAccounts", [None])
-        if self.clean_response:
-            return [LargestAccounts(account) for account in response["value"]]
-        return response
-
-    def get_leader_schedule(
-        self,
-    ) -> (
-        RPCResponse[Dict[str, Union[List[int], Any]]] | Dict[str, Union[List[int], Any]]
-    ):
-        """
-        Returns the leader schedule.
-
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
-        return self.build_and_send_request("getLeaderSchedule", [None])
-
-    def get_max_retransmit_slot(self) -> RPCResponse[int] | int:
-        """
-        Returns the maximum retransmit slot.
-
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
-        return self.build_and_send_request("getMaxRetransmitSlot", [None])
-
-    def get_max_shred_insert_slot(self) -> RPCResponse[int] | int:
-        """
-        Returns the maximum shred insert slot.
-
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
-        return self.build_and_send_request("getMaxShredInsertSlot", [None])
-
-    def get_minimum_balance_for_rent_exemption(
-        self, acct_length: int, commitment: Optional[Commitment] = None
-    ) -> RPCResponse[int] | int:
-        """
-        Returns the minimum balance for rent exemption.
-
-        Args:
-            acct_length (int): The length of the account.
-            commitment (Commitment, optional): The level of commitment desired when querying state.
-
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
-        commitment = validate_commitment(commitment) if commitment else None
-        return self.build_and_send_request(
-            "getMinimumBalanceForRentExemption", [acct_length, commitment]
-        )
-
-    def get_multiple_accounts(
-        self, pubkeys: List[str]
-    ) -> RPCResponse[List[AccountInfoType]] | List[AccountInfo]:
-        """
-        Returns the multiple accounts.
-
-        Args:
-            pubkeys (list): The public keys.
-
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
-        response = self.build_and_send_request("getMultipleAccounts", pubkeys)
-        if self.clean_response:
-            return [AccountInfo(account) for account in response["value"]]
-        return response
-
-    def get_program_accounts(
-        self, public_key: PublicKey
-    ) -> RPCResponse[List[ProgramAccountType]] | List[ProgramAccount]:
-        """
-        Returns the program accounts.
-
-        Args:
-            public_key (PublicKey): The public key.
-
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
-        response = self.build_and_send_request("getProgramAccounts", [public_key])
-        if self.clean_response:
-            return [ProgramAccount(account) for account in response]
-        return response
-
-    def get_latest_blockhash(
+    def get_supply(
         self, commitment: Optional[Commitment] = None
-    ) -> RPCResponse[BlockHashType] | BlockHash:
-        """
-        Returns the recent blockhash.
-
-        Args:
-            commitment (Commitment, optional): The level of commitment desired when querying state.
-
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
-        commitment = validate_commitment(commitment) if commitment else None
-        response = self.build_and_send_request("getLatestBlockhash", [commitment])
-        if self.clean_response:
-            return BlockHash(response["value"])
-        return response
-
-    def get_recent_performance_samples(
-        self, commitment: Optional[Commitment] = None
-    ) -> (
-        RPCResponse[List[RecentPerformanceSamplesType]] | List[RecentPerformanceSamples]
-    ):
-        """
-        Returns the recent performance samples.
-
-        Args:
-            commitment (Commitment, optional): The level of commitment desired when querying state.
-
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
-        commitment = validate_commitment(commitment) if commitment else None
-        response = self.build_and_send_request(
-            "getRecentPerformanceSamples", [commitment]
-        )
-        if self.clean_response:
-            return [RecentPerformanceSamples(sample) for sample in response]
-        return response
-
-    def get_signatures_for_address(
-        self,
-        acct_address: Text,
-        limit: Optional[Text] = None,
-        before: Optional[Text] = None,
-        until: Optional[Text] = None,
-    ) -> RPCResponse[List[TransactionSignatureType]] | List[TransactionSignature]:
-        """
-        Returns the signatures for the specified account address.
-
-        Args:
-            acct_address (str): The account address.
-
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
-        params = [acct_address]
-        options = {}
-
-        if limit is not None:
-            options["limit"] = limit
-        if before is not None:
-            options["before"] = before
-        if until is not None:
-            options["until"] = until
-
-        if options:
-            params.append(options)
-
-        response = self.build_and_send_request("getSignaturesForAddress", params)
-        if self.clean_response:
-            return [TransactionSignature(signature) for signature in response]
-        return response
-
-    def get_signature_statuses(
-        self, transaction_sigs: List[Text]
-    ) -> RPCResponse[List[SignatureStatusType]] | List[SignatureStatus]:
-        """
-        Returns the signature statuses for the specified transaction signatures.
-
-        Args:
-            transaction_sigs (List[str]): The transaction signatures.
-
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
-        response = self.build_and_send_request("getSignatureStatuses", transaction_sigs)
-        if self.clean_response:
-            return [SignatureStatus(status) for status in response["value"]]
-        return response
-
-    def get_slot(self) -> RPCResponse[int] | int:
-        """
-        Returns the current slot.
-
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
-        return self.build_and_send_request("getSlot", [None])
-
-    def get_supply(self) -> RPCResponse[SupplyType] | Supply:
-        """
-        Returns the supply.
-
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
-        response = self.build_and_send_request("getSupply", [None])
+    ) -> RPCResponse[SupplyType] | Supply:
+        """Returns information about the current supply."""
+        params: list = []
+        if commitment:
+            params.append(validate_commitment(commitment))
+        response = self.build_and_send_request("getSupply", params if params else [None])
         if self.clean_response:
             return Supply(response["value"])
         return response
 
+    # ========================================================================
+    # Stake Methods
+    # ========================================================================
+
+    def get_stake_minimum_delegation(
+        self, commitment: Optional[Commitment] = None
+    ) -> RPCResponse[int] | int:
+        """Returns the stake minimum delegation in lamports."""
+        params: list = []
+        if commitment:
+            params.append(validate_commitment(commitment))
+        response = self.build_and_send_request("getStakeMinimumDelegation", params if params else [None])
+        if self.clean_response:
+            return response["value"]
+        return response
+
+    # ========================================================================
+    # Token Methods
+    # ========================================================================
+
     def get_token_accounts_by_owner(
-        self,
-        public_key: Text | PublicKey,
-        commitment: Optional[Commitment] = None,
+        self, public_key: Text | PublicKey, commitment: Optional[Commitment] = None,
         **kwargs,
     ) -> RPCResponse[List[ProgramAccountType]] | List[ProgramAccount]:
-        """
-        Returns the token accounts for the specified owner.
-
-        Args:
-            public_key (str | PublicKey): The public key of the owner.
-            commitment (Commitment, optional): The level of commitment desired when querying state.
-            **kwargs: Additional keyword arguments.
-
-        Raises:
-            ValueError: If neither mint_id nor program_id is passed as a keyword argument.
-
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
+        """Returns all SPL Token accounts by owner."""
         if "mint_id" not in kwargs and "program_id" not in kwargs:
-            raise ValueError(
-                "You must pass either mint_id or program_id keyword argument"
-            )
+            raise ValueError("You must pass either mint_id or program_id keyword argument")
         mint_id = kwargs.get("mint_id")
         program_id = kwargs.get("program_id")
-        # Who doesn't like JSON?
         encoding = kwargs.get("encoding", "jsonParsed")
 
-        commitment = validate_commitment(commitment) if commitment else None
+        config: Dict[str, Any] = {"encoding": encoding}
+        if commitment:
+            config.update(validate_commitment(commitment))
+
         response = self.build_and_send_request(
             "getTokenAccountsByOwner",
-            [
-                str(public_key),
-                {"mint": mint_id} if mint_id else {"programId": program_id},
-                {"encoding": encoding, "commitment": commitment},
-            ],
+            [str(public_key), {"mint": mint_id} if mint_id else {"programId": program_id}, config],
+        )
+        if self.clean_response:
+            return [ProgramAccount(account) for account in response["value"]]
+        return response
+
+    def get_token_accounts_by_delegate(
+        self, delegate: Text | PublicKey, commitment: Optional[Commitment] = None,
+        **kwargs,
+    ) -> RPCResponse[List[ProgramAccountType]] | List[ProgramAccount]:
+        """Returns all SPL Token accounts approved by a delegate."""
+        if "mint_id" not in kwargs and "program_id" not in kwargs:
+            raise ValueError("You must pass either mint_id or program_id keyword argument")
+        mint_id = kwargs.get("mint_id")
+        program_id = kwargs.get("program_id")
+        encoding = kwargs.get("encoding", "jsonParsed")
+
+        config: Dict[str, Any] = {"encoding": encoding}
+        if commitment:
+            config.update(validate_commitment(commitment))
+
+        response = self.build_and_send_request(
+            "getTokenAccountsByDelegate",
+            [str(delegate), {"mint": mint_id} if mint_id else {"programId": program_id}, config],
         )
         if self.clean_response:
             return [ProgramAccount(account) for account in response["value"]]
         return response
 
     def get_token_account_balance(
-        self,
-        token_account: Text | PublicKey,
-        commitment: Optional[Commitment] = None,
+        self, token_account: Text | PublicKey, commitment: Optional[Commitment] = None,
     ) -> RPCResponse:
-        """
-        Returns the token account balance for the specified owner.
-
-        Args:
-            token_account (str | PublicKey): The token account pubkey.
-            commitment (Commitment, optional): The level of commitment desired when querying state.
-
-        Returns:
-            RPCResponse: The response from the RPC endpoint.
-        """
-
-        commitment = validate_commitment(commitment) if commitment else None
-        response = self.build_and_send_request(
-            "getTokenAccountBalance",
-            [
-                str(token_account),
-            ],
-        )
+        """Returns the token balance of an SPL Token account."""
+        params: list = [str(token_account)]
+        if commitment:
+            params.append(validate_commitment(commitment))
+        response = self.build_and_send_request("getTokenAccountBalance", params)
         if self.clean_response:
             return response["value"]
         return response
 
+    def get_token_supply(
+        self, mint: Text | PublicKey, commitment: Optional[Commitment] = None
+    ) -> RPCResponse[Dict[str, Any]] | Dict[str, Any]:
+        """Returns the total supply of an SPL Token."""
+        params: list = [str(mint)]
+        if commitment:
+            params.append(validate_commitment(commitment))
+        response = self.build_and_send_request("getTokenSupply", params)
+        if self.clean_response:
+            return response["value"]
+        return response
+
+    def get_token_largest_accounts(
+        self, mint: Text | PublicKey, commitment: Optional[Commitment] = None
+    ) -> RPCResponse[List[Dict[str, Any]]] | List[Dict[str, Any]]:
+        """Returns the 20 largest accounts for an SPL Token."""
+        params: list = [str(mint)]
+        if commitment:
+            params.append(validate_commitment(commitment))
+        response = self.build_and_send_request("getTokenLargestAccounts", params)
+        if self.clean_response:
+            return response["value"]
+        return response
+
+    # ========================================================================
+    # Transaction Methods
+    # ========================================================================
+
     def get_transaction(
-        self,
-        signature: Text,
+        self, signature: Text,
         max_supported_transaction_version: Optional[int] = 0,
         commitment: Optional[Commitment] = None,
     ) -> RPCResponse[TransactionElementType] | TransactionElement:
-        """
-        Sends a request to the Solana RPC endpoint to retrieve a transaction by its signature.
-
-        Args:
-            signature (str): The signature of the transaction to retrieve.
-            commitment (Commitment, optional): The level of commitment desired when querying state.
-            max_supported_transaction_version (int, optional): Set the max transaction version to return in responses
-
-        Returns:
-            RPCResponse: The response from the Solana RPC endpoint.
-        """
-        response = self.build_and_send_request(
-            "getTransaction",
-            [
-                signature,
-                {
-                    "commitment": commitment,
-                    "maxSupportedTransactionVersion": max_supported_transaction_version,
-                },
-            ],
-        )
+        """Returns transaction details for a confirmed transaction."""
+        config: Dict[str, Any] = {
+            "maxSupportedTransactionVersion": max_supported_transaction_version,
+        }
+        if commitment:
+            config.update(validate_commitment(commitment))
+        response = self.build_and_send_request("getTransaction", [signature, config])
         if self.clean_response:
-            if response == None:
+            if response is None:
                 raise ValueError("Transaction not found")
             return TransactionElement(response)
         return response
 
-    def build_and_send_request(
-        self, method, params: List[Any]
-    ) -> RPCResponse | Dict[str, Any] | List[Dict[str, Any]]:
-        """
-        Builds and sends an RPC request to the server.
+    def get_transaction_count(
+        self, commitment: Optional[Commitment] = None
+    ) -> RPCResponse[int] | int:
+        """Returns the current transaction count from the ledger."""
+        params: list = []
+        if commitment:
+            params.append(validate_commitment(commitment))
+        return self.build_and_send_request("getTransactionCount", params if params else [None])
 
-        Args:
-            method (str): The RPC method to call.
-            params (List[Any]): The parameters to pass to the RPC method.
-
-        Returns:
-            RPCResponse: The response from the server.
-        """
-        data: Dict[str, Any] = self.http.build_data(method=method, params=params)
-        res: RPCResponse = self.http.send(data)
+    def get_signatures_for_address(
+        self, acct_address: Text,
+        limit: Optional[int] = None,
+        before: Optional[Text] = None,
+        until: Optional[Text] = None,
+        commitment: Optional[Commitment] = None,
+    ) -> RPCResponse[List[TransactionSignatureType]] | List[TransactionSignature]:
+        """Returns signatures for confirmed transactions involving an address."""
+        params: list = [acct_address]
+        options: Dict[str, Any] = {}
+        if limit is not None:
+            options["limit"] = limit
+        if before is not None:
+            options["before"] = before
+        if until is not None:
+            options["until"] = until
+        if commitment:
+            options.update(validate_commitment(commitment))
+        if options:
+            params.append(options)
+        response = self.build_and_send_request("getSignaturesForAddress", params)
         if self.clean_response:
-            if "error" in res:
-                raise RPCRequestError(
-                    f"Failed to fetch data from RPC endpoint. Error {res['error']['code']}: {res['error']['message']}"
-                )
+            return [TransactionSignature(sig) for sig in response]
+        return response
 
-            if (
-                isinstance(res["result"], dict)
-                or isinstance(res["result"], list)
-                or isinstance(res["result"], str)
-                or isinstance(res["result"], int)
-                or res["result"] == None
-            ):
-                return res["result"]
-            else:
-                raise RPCRequestError(
-                    f"Invalid response from RPC endpoint. Expected types dict | list | str, got {type(res['result']).__name__}"
-                )
+    def get_signature_statuses(
+        self, transaction_sigs: List[Text], search_transaction_history: bool = False
+    ) -> RPCResponse[List[SignatureStatusType]] | List[SignatureStatus]:
+        """Returns the statuses of a list of signatures."""
+        params: list = [transaction_sigs]
+        if search_transaction_history:
+            params.append({"searchTransactionHistory": True})
+        response = self.build_and_send_request("getSignatureStatuses", params)
+        if self.clean_response:
+            return [SignatureStatus(status) for status in response["value"] if status]
+        return response
 
-        return res
+    def get_recent_performance_samples(
+        self, limit: Optional[int] = None
+    ) -> RPCResponse[List[RecentPerformanceSamplesType]] | List[RecentPerformanceSamples]:
+        """Returns a list of recent performance samples."""
+        params: list = [limit] if limit else [None]
+        response = self.build_and_send_request("getRecentPerformanceSamples", params)
+        if self.clean_response:
+            return [RecentPerformanceSamples(sample) for sample in response]
+        return response
 
-    # Non "get" methods
+    def simulate_transaction(
+        self, transaction: Text,
+        sig_verify: bool = False,
+        commitment: Optional[Commitment] = None,
+        replace_recent_blockhash: bool = False,
+    ) -> RPCResponse[Dict[str, Any]] | Dict[str, Any]:
+        """Simulates sending a transaction (base64-encoded)."""
+        config: Dict[str, Any] = {
+            "encoding": "base64",
+            "sigVerify": sig_verify,
+            "replaceRecentBlockhash": replace_recent_blockhash,
+        }
+        if commitment:
+            config.update(validate_commitment(commitment))
+        response = self.build_and_send_request("simulateTransaction", [transaction, config])
+        if self.clean_response:
+            return response["value"]
+        return response
+
+    # ========================================================================
+    # Action Methods (non-get)
+    # ========================================================================
+
     def request_airdrop(
-        self, public_key: PublicKey | Text, lamports: int
+        self, public_key: PublicKey | Text, lamports: int,
+        commitment: Optional[Commitment] = None
     ) -> RPCResponse[str] | str:
-        """
-        Requests an airdrop of lamports to the specified public key.
+        """Requests an airdrop of lamports to the specified public key."""
+        params: list = [str(public_key), lamports]
+        if commitment:
+            params.append(validate_commitment(commitment))
+        return self.build_and_send_request("requestAirdrop", params)
 
-        Args:
-            public_key (PublicKey | Text): The public key of the account to receive the airdrop.
-            lamports (int): The amount of lamports to request in the airdrop.
-
-        Returns:
-            RPCResponse: The response from the Solana JSON RPC API.
-        """
-        return self.build_and_send_request("requestAirdrop", [public_key, lamports])
-
-    def send_transaction(self, transaction: Transaction, options: Optional[Dict] = None) -> RPCResponse[str] | str:
-        """
-        Sends a transaction to the Solana network.
-
-        Args:
-            transaction (Transaction): The transaction to send.
-            options (Dict): Options for sending transactions
-
-        Returns:
-            RPCResponse: The response from the Solana network.
-        """
+    def send_transaction(
+        self, transaction: Transaction, options: Optional[Dict] = None
+    ) -> RPCResponse[str] | str:
+        """Signs and sends a transaction to the network."""
         recent_blockhash = transaction.recent_blockhash
-
         if recent_blockhash is None:
             blockhash_resp = self.get_latest_blockhash()
             recent_blockhash = blockhash_resp.blockhash
-        
-        if options:
-            options = options
-        else:
+
+        if options is None:
             options = {"encoding": "base64"}
 
         transaction.recent_blockhash = recent_blockhash
@@ -793,3 +666,27 @@ class Client:
         return self.build_and_send_request(
             "sendTransaction", [transaction.serialize(), options]
         )
+
+    # ========================================================================
+    # Internal
+    # ========================================================================
+
+    def build_and_send_request(
+        self, method: str, params: List[Any]
+    ) -> RPCResponse | Dict[str, Any] | List[Dict[str, Any]]:
+        """Builds and sends an RPC request."""
+        data: Dict[str, Any] = self.http.build_data(method=method, params=params)
+        res: RPCResponse = self.http.send(data)
+        if self.clean_response:
+            if "error" in res:
+                raise RPCRequestError(
+                    f"RPC Error {res['error']['code']}: {res['error']['message']}"
+                )
+            result = res.get("result")
+            if result is None or isinstance(result, (dict, list, str, int, float, bool)):
+                return result
+            else:
+                raise RPCRequestError(
+                    f"Unexpected response type: {type(result).__name__}"
+                )
+        return res

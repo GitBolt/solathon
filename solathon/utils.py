@@ -24,16 +24,14 @@ def truncate_float(number: float, length: int) -> float:
     return number
 
 
-def validate_commitment(value: Commitment) -> Commitment:
-    # If the types change make the same change in the type hint
-    allowed_commitments = {"processed", "confirmed", "finalized",
-                           "recent", "single", "singleGossip", "root", "max"}
+def validate_commitment(value: Commitment) -> dict:
+    allowed_commitments = {"processed", "confirmed", "finalized"}
 
     if value not in allowed_commitments:
         raise ValueError(
             f"Invalid commitment value. Allowed values are {allowed_commitments}")
 
-    return value
+    return {"commitment": value}
 
 def lamport_to_sol(lamports: int) -> float:
     return truncate_float(lamports * SOL_PER_LAMPORT, SOL_FLOATING_PRECISION)

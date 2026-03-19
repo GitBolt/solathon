@@ -38,8 +38,7 @@ class RPCResponse(TypedDict):
     result: Any
     error: RPCErrorType
 
-Commitment = Literal["processed", "confirmed", "finalized", "recent", "single", "singleGossip", "root", "max"]
-CommitmentConfig = Literal["processed", "confirmed", "finalized"]
+Commitment = Literal["processed", "confirmed", "finalized"]
 
 class PubKeyIdentityType(TypedDict):
     '''
@@ -100,7 +99,7 @@ class TransactionSignatureType(TypedDict):
     err: Any
     memo: Optional[str]
     blockTime: Optional[int]
-    confirmationStatus: Optional[CommitmentConfig]
+    confirmationStatus: Optional[Commitment]
 
 class TransactionSignature:
     '''
@@ -122,7 +121,7 @@ class SignatureStatusType(TypedDict):
     slot: int
     confirmations: Optional[int]
     err: Any
-    confirmationStatus: Optional[CommitmentConfig]
+    confirmationStatus: Optional[Commitment]
 
 class SignatureStatus:
     '''
