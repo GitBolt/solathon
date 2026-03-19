@@ -106,11 +106,11 @@ def create_transfer(client: Client,  sender: Keypair, transfer_fields: CreateTra
 
     block_hash: BlockHash = None
     if client.clean_response == False:
-        raw_block_hash: RPCResponse[BlockHashType] = client.get_latest_blockhas(
+        raw_block_hash: RPCResponse[BlockHashType] = client.get_latest_blockhash(
             commitment=commitment)
         block_hash: BlockHash = BlockHash(raw_block_hash['result']['value'])
     else:
-        block_hash: BlockHash = client.get_latest_blockhas(
+        block_hash: BlockHash = client.get_latest_blockhash(
             commitment=commitment)
 
     transaction = Transaction(instructions=[instruction], signers=[
