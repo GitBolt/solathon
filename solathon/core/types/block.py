@@ -177,13 +177,13 @@ class Block:
     '''
 
     def __init__(self, response: BlockType) -> None:
-        self.block_height = response['block_height']
-        self.block_time = response['block_time']
+        self.block_height = response['blockHeight']
+        self.block_time = response['blockTime']
         self.blockhash = response['blockhash']
-        self.parent_slot = response['parent_slot']
-        self.previous_blockhash = response['previous_blockhash']
+        self.parent_slot = response['parentSlot']
+        self.previous_blockhash = response['previousBlockhash']
         self.transactions = [TransactionElement(
-            transaction) for transaction in response['transactions']]
+            transaction) for transaction in response.get('transactions', [])]
 
     def __repr__(self) -> str:
         return f"Block(block_height={self.block_height!r}, block_time={self.block_time!r}, blockhash={self.blockhash!r},num_transactions={len(self.transactions)!r})"

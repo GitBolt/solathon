@@ -88,7 +88,7 @@ class RecentPerformanceSamples:
         self.num_slots = response['numSlots']
         self.num_transactions = response['numTransactions']
         self.sample_period_secs = response['samplePeriodSecs']
-        self.num_non_vote_transaction = response['numNonVoteTransaction']
+        self.num_non_vote_transaction = response.get('numNonVoteTransaction')
 
 class TransactionSignatureType(TypedDict):
     '''
