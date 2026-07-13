@@ -24,6 +24,8 @@ Solathon is a high performance, easy to use and feature-rich Solana SDK for Pyth
 ```
 pip install solathon
 ```
+
+Solathon supports Python 3.10 and newer.
 ## Client example
 ```python
 from solathon import Client
@@ -41,6 +43,26 @@ public_key = PublicKey("B3BhJ1nvPvEhx3hq3nfK8hx4WYcKZdbhavSobZEA44ai")
 balance = client.get_balance(public_key)
 print(balance)
 ```
+
+## RPC compatibility
+
+`Client` and `AsyncClient` cover all standard HTTP methods in the current
+[Solana RPC reference](https://solana.com/docs/rpc/http), including versioned
+transactions, transaction simulation, prioritization fees, token queries, and
+vote/stake queries.
+
+## Priority fees
+
+Compute budget instructions can be added before the other transaction instructions when the network is congested.
+
+```python
+from solathon.core import ComputeBudgetProgram
+
+compute_limit = ComputeBudgetProgram.set_compute_unit_limit(200_000)
+compute_price = ComputeBudgetProgram.set_compute_unit_price(1_000)
+```
+
+Add these instructions before the program instructions in the transaction.
 
 # 🗃️ Contribution
 Drop a pull request for anything which seems wrong or can be improved, could be a small typo or an entirely new feature! Checkout [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to proceed.

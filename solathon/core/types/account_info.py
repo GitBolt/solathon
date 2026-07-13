@@ -23,7 +23,7 @@ class AccountInfo():
         self.owner = result['owner']
         self.executable = result['executable']
         self.rent_epoch = result['rentEpoch']
-        self.size = result.get('size', None)
+        self.size = result.get('space', result.get('size'))
         self.data = result['data']
 
     def __repr__(self) -> str:

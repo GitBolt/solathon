@@ -1,17 +1,9 @@
-# Thanks to https://github.com/michaelhly/solana-py/blob/master/src/solana/system_program.py
 from __future__ import annotations
 
 from enum import IntEnum
-from construct import (
-    Bytes,
-    Int32ul,
-    Int64ul,
-    PaddedString,
-    Padding,
-    Pass,
-    Switch,
-    Struct,
-)
+from struct import pack
+from typing import Any, Callable
+
 from ..publickey import PublicKey
 
 
@@ -32,74 +24,94 @@ class InstructionType(IntEnum):
 
 SYSTEM_PROGRAM_ID: PublicKey = PublicKey("11111111111111111111111111111111")
 
-PUBLIC_KEY_LAYOUT: Bytes = Bytes(32)
 
-RUST_STRING_LAYOUT: Struct = Struct(
-    "length" / Int32ul,
-    Padding(4),
-    "chars" / PaddedString(lambda this: this.length, "utf-8"),
+class Layout:
+    """Small encoder with the same build interface used by instruction helpers."""
+
+    def __init__(self, encoder: Callable[[Any], bytes]) -> None:
+        self.encoder = encoder
+
+    def build(self, value: Any) -> bytes:
+        """Encodes a layout value into its wire representation."""
+        return self.encoder(value)
+
+
+def _encode_public_key(value: bytes) -> bytes:
+    """Encodes and validates a public key."""
+    public_key = bytes(value)
+    if len(public_key) != PublicKey.LENGTH:
+        raise ValueError("Public key must contain 32 bytes")
+    return public_key
+
+
+def _encode_rust_string(value: str) -> bytes:
+    """Encodes a string using Solana's eight-byte length prefix."""
+    encoded = value.encode("utf-8")
+    return pack("<Q", len(encoded)) + encoded
+
+
+PUBLIC_KEY_LAYOUT = Layout(_encode_public_key)
+RUST_STRING_LAYOUT = Layout(_encode_rust_string)
+
+CREATE_ACCOUNT_LAYOUT = Layout(
+    lambda args: pack("<QQ", args["lamports"], args["space"])
+    + _encode_public_key(args["program_id"])
+)
+ASSIGN_LAYOUT = Layout(lambda args: _encode_public_key(args["program_id"]))
+TRANFER_LAYOUT = Layout(lambda args: pack("<Q", args["lamports"]))
+CREATE_ACCOUNT_WTIH_SEED_LAYOUT = Layout(
+    lambda args: _encode_public_key(args["base"])
+    + _encode_rust_string(args["seed"])
+    + pack("<QQ", args["lamports"], args["space"])
+    + _encode_public_key(args["program_id"])
+)
+WITHDRAW_NONCE_ACCOUNT_LAYOUT = Layout(lambda args: pack("<Q", args["lamports"]))
+INITIALIZE_NONCE_ACCOUNT_LAYOUT = Layout(
+    lambda args: _encode_public_key(args["authorized"])
+)
+AUTHORIZE_NONCE_ACCOUNT_LAYOUT = Layout(
+    lambda args: _encode_public_key(args["authorized"])
+)
+ALLOCATE_LAYOUT = Layout(lambda args: pack("<Q", args["space"]))
+ALLOCATE_WITH_SEED_LAYOUT = Layout(
+    lambda args: _encode_public_key(args["base"])
+    + _encode_rust_string(args["seed"])
+    + pack("<Q", args["space"])
+    + _encode_public_key(args["program_id"])
+)
+ASSIGN_WITH_SEED_LAYOUT = Layout(
+    lambda args: _encode_public_key(args["base"])
+    + _encode_rust_string(args["seed"])
+    + _encode_public_key(args["program_id"])
+)
+TRANSFER_WITH_SEED_LAYOUT = Layout(
+    lambda args: pack("<Q", args["lamports"])
+    + _encode_rust_string(args["from_seed"])
+    + _encode_public_key(args.get("from_owner", args.get("from_ower")))
 )
 
-CREATE_ACCOUNT_LAYOUT = Struct(
-    "lamports" / Int64ul,
-    "space" / Int64ul,
-    "program_id" / PUBLIC_KEY_LAYOUT,
-)
+INSTRUCTION_LAYOUTS = {
+    InstructionType.CREATE_ACCOUNT: CREATE_ACCOUNT_LAYOUT,
+    InstructionType.ASSIGN: ASSIGN_LAYOUT,
+    InstructionType.TRANSFER: TRANFER_LAYOUT,
+    InstructionType.CREATE_ACCOUNT_WITH_SEED: CREATE_ACCOUNT_WTIH_SEED_LAYOUT,
+    InstructionType.WITHDRAW_NONCE_ACCOUNT: WITHDRAW_NONCE_ACCOUNT_LAYOUT,
+    InstructionType.INITIALIZE_NONCE_ACCOUNT: INITIALIZE_NONCE_ACCOUNT_LAYOUT,
+    InstructionType.AUTHORIZE_NONCE_ACCOUNT: AUTHORIZE_NONCE_ACCOUNT_LAYOUT,
+    InstructionType.ALLOCATE: ALLOCATE_LAYOUT,
+    InstructionType.ALLOCATE_WITH_SEED: ALLOCATE_WITH_SEED_LAYOUT,
+    InstructionType.ASSIGN_WITH_SEED: ASSIGN_WITH_SEED_LAYOUT,
+    InstructionType.TRANSFER_WITH_SEED: TRANSFER_WITH_SEED_LAYOUT,
+}
 
-ASSIGN_LAYOUT = Struct("program_id" / PUBLIC_KEY_LAYOUT)
 
-TRANFER_LAYOUT = Struct("lamports" / Int64ul)
+def _encode_instruction(value: dict[str, Any]) -> bytes:
+    """Encodes a system instruction discriminator and arguments."""
+    instruction_type = InstructionType(value["type"])
+    data = pack("<I", instruction_type)
+    if instruction_type == InstructionType.ADVANCE_NONCE_ACCOUNT:
+        return data
+    return data + INSTRUCTION_LAYOUTS[instruction_type].build(value["args"])
 
-CREATE_ACCOUNT_WTIH_SEED_LAYOUT = Struct(
-    "base" / PUBLIC_KEY_LAYOUT,
-    "seed" / RUST_STRING_LAYOUT,
-    "lamports" / Int64ul,
-    "space" / Int64ul,
-    "program_id" / PUBLIC_KEY_LAYOUT,
-)
 
-WITHDRAW_NONCE_ACCOUNT_LAYOUT = Struct("lamports" / Int64ul)
-
-INITIALIZE_NONCE_ACCOUNT_LAYOUT = Struct("authorized" / PUBLIC_KEY_LAYOUT)
-
-AUTHORIZE_NONCE_ACCOUNT_LAYOUT = Struct("authorized" / PUBLIC_KEY_LAYOUT)
-
-ALLOCATE_LAYOUT = Struct("space" / Int64ul)
-
-ALLOCATE_WITH_SEED_LAYOUT = Struct(
-    "base" / PUBLIC_KEY_LAYOUT, "seed" / RUST_STRING_LAYOUT, "space" /
-    Int64ul, "program_id" / PUBLIC_KEY_LAYOUT
-)
-
-ASSIGN_WITH_SEED_LAYOUT = Struct(
-    "base" / PUBLIC_KEY_LAYOUT, "seed" /
-    RUST_STRING_LAYOUT, "program_id" / PUBLIC_KEY_LAYOUT
-)
-
-TRANSFER_WITH_SEED_LAYOUT = Struct(
-    "lamports" / Int64ul,
-    "from_seed" / RUST_STRING_LAYOUT,
-    "from_ower" / PUBLIC_KEY_LAYOUT,
-)
-
-SYSTEM_INSTRUCTIONS_LAYOUT = Struct(
-    "type" / Int32ul,
-    "args"
-    / Switch(
-        lambda this: this.type,
-        {
-            InstructionType.CREATE_ACCOUNT: CREATE_ACCOUNT_LAYOUT,
-            InstructionType.ASSIGN: ASSIGN_LAYOUT,
-            InstructionType.TRANSFER: TRANFER_LAYOUT,
-            InstructionType.CREATE_ACCOUNT_WITH_SEED: CREATE_ACCOUNT_WTIH_SEED_LAYOUT,
-            InstructionType.ADVANCE_NONCE_ACCOUNT: Pass,  # No args
-            InstructionType.WITHDRAW_NONCE_ACCOUNT: WITHDRAW_NONCE_ACCOUNT_LAYOUT,
-            InstructionType.INITIALIZE_NONCE_ACCOUNT: INITIALIZE_NONCE_ACCOUNT_LAYOUT,
-            InstructionType.AUTHORIZE_NONCE_ACCOUNT: AUTHORIZE_NONCE_ACCOUNT_LAYOUT,
-            InstructionType.ALLOCATE: ALLOCATE_LAYOUT,
-            InstructionType.ALLOCATE_WITH_SEED: ALLOCATE_WITH_SEED_LAYOUT,
-            InstructionType.ASSIGN_WITH_SEED: ASSIGN_WITH_SEED_LAYOUT,
-            InstructionType.TRANSFER_WITH_SEED: TRANSFER_WITH_SEED_LAYOUT,
-        },
-    ),
-)
+SYSTEM_INSTRUCTIONS_LAYOUT = Layout(_encode_instruction)

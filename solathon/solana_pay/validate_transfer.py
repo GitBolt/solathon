@@ -16,7 +16,7 @@ def validate_transfer(client: Client, signature: str, transfer_fields: CreateTra
         client (Client) - A connection client to the cluster.
         signature (str) - Signature of the transaction to validate.
         transfer_fields (CreateTransferFields) - Fields of a Solana Pay transfer request URL.
-        commitment (Commitment, optional) - commitment option for `getRecentBlockhash`.
+        commitment (Commitment, optional) - commitment option for `getTransaction`.
 
     Raises
         ValueError - If `recipient` or `amount` is missing from `transfer_fields`.

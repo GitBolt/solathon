@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import sys
-import asyncio
 import base64
 import httpx
 from typing import Any, List, Dict
@@ -25,11 +24,12 @@ class HTTPClient:
             ),
         }
         self.request_id = 0
-        self.client = httpx.Client()
+        self.client = httpx.Client(timeout=30.0)
 
     def send(self, data: Dict[str, Any]) -> RPCResponse:
         res = self.client.post(
                 url=self.endpoint, headers=self.headers, json=data)
+        res.raise_for_status()
         return res.json()
 
     def build_data(self, method: str, params: List[Any]) -> Dict[str, Any]:
@@ -38,27 +38,26 @@ class HTTPClient:
             str(i) if isinstance(i, PublicKey) else i for i in params
             ]
 
-        if isinstance(params[0], bytes):
+        if params and isinstance(params[0], bytes):
             params[0] = base64.b64encode(params[0]).decode("utf-8")
 
         return {
             "jsonrpc": "2.0",
             "id": self.request_id,
             "method": method,
-            "params": None if params[0] is None else params,
+            "params": [] if params == [None] else params,
         }
 
     def refresh(self) -> None:
         self.client.close()
         self.request_id = 0
-        self.client = httpx.Client()
+        self.client = httpx.Client(timeout=30.0)
 
 
 class AsyncHTTPClient:
     """Asynchronous HTTP Client to interact with Solana JSON RPC"""
 
     def __init__(self, endpoint: str):
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
         self.endpoint = endpoint
         version = sys.version_info
         self.headers = {
@@ -69,12 +68,13 @@ class AsyncHTTPClient:
             ),
         }
         self.request_id = 0
-        self.client = httpx.AsyncClient()
+        self.client = httpx.AsyncClient(timeout=30.0)
         
 
     async def send(self, data: Dict[str, Any]) -> RPCResponse:
         res = await self.client.post(
                 url=self.endpoint, headers=self.headers, json=data)
+        res.raise_for_status()
         return res.json()
 
     def build_data(self, method: str, params: List[Any]) -> Dict[str, Any]:
@@ -83,18 +83,18 @@ class AsyncHTTPClient:
             str(i) if isinstance(i, PublicKey) else i for i in params
             ]
 
-        if isinstance(params[0], bytes):
+        if params and isinstance(params[0], bytes):
             params[0] = base64.b64encode(params[0]).decode("utf-8")
 
         return {
             "jsonrpc": "2.0",
             "id": self.request_id,
             "method": method,
-            "params": None if params[0] is None else params,
+            "params": [] if params == [None] else params,
         }
 
 
     async def refresh(self) -> None:
         await self.client.aclose()
         self.request_id = 0
-        self.client = httpx.AsyncClient()
+        self.client = httpx.AsyncClient(timeout=30.0)

@@ -21,7 +21,7 @@ def create_transfer(client: Client,  sender: Keypair, transfer_fields: CreateTra
         client (Client) - A connection client to the cluster.
         sender (Keypair) - Account that will send the transfer.
         transfer_fields (CreateTransferFields) - Fields of a Solana Pay transfer request URL.
-        commitment (Commitment, optional) - commitment option for `getRecentBlockhash`.
+        commitment (Commitment, optional) - commitment option for `getLatestBlockhash`.
 
     Raises
         ValueError - If `recipient` or `amount` is missing from `transfer_fields`.

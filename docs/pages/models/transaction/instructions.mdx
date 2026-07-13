@@ -17,6 +17,7 @@ from solathon.core.instructions import *
 #### Classes
 - [AccountMeta](#accountmeta)
 - [Instruction](#instruction)
+- [ComputeBudgetProgram](#computebudgetprogram)
 
 
 ## Instructions
@@ -208,6 +209,23 @@ transaction = Transaction(instructions=[instruction], signers=[sender])
 
 result = client.send_transaction(transaction)
 print("Transaction response: ", result)
+```
+</Code>
+
+#### ComputeBudgetProgram
+Creates compute budget instructions for transactions that need a higher compute limit or priority fee.
+
+<Code>
+```python
+from solathon.core import ComputeBudgetProgram
+
+compute_limit = ComputeBudgetProgram.set_compute_unit_limit(200_000)
+compute_price = ComputeBudgetProgram.set_compute_unit_price(1_000)
+
+transaction = Transaction(
+    instructions=[compute_limit, compute_price, instruction],
+    signers=[sender]
+)
 ```
 </Code>
 

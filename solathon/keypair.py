@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import base58
+from pathlib import Path
 from typing import List
 from .publickey import PublicKey
 from nacl.signing import SigningKey, SignedMessage
@@ -62,7 +63,7 @@ class Keypair:
 
     @staticmethod
     def from_file(file_path: str) -> Keypair:
-        with open(file_path, 'r') as f:
+        with Path(file_path).expanduser().open() as f:
             data = json.load(f)
 
         private_key_bytes = bytes(data[:32])

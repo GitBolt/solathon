@@ -177,11 +177,11 @@ class Block:
     '''
 
     def __init__(self, response: BlockType) -> None:
-        self.block_height = response['block_height']
-        self.block_time = response['block_time']
+        self.block_height = response['blockHeight']
+        self.block_time = response['blockTime']
         self.blockhash = response['blockhash']
-        self.parent_slot = response['parent_slot']
-        self.previous_blockhash = response['previous_blockhash']
+        self.parent_slot = response['parentSlot']
+        self.previous_blockhash = response['previousBlockhash']
         self.transactions = [TransactionElement(
             transaction) for transaction in response['transactions']]
 
@@ -276,7 +276,7 @@ class BlockHashType(TypedDict):
     JSON Response type of Block Hash Information received by RPC
     '''
     blockhash: str
-    feeCalculator: FeeCalculatorType
+    lastValidBlockHeight: int
 
 
 class BlockHash:
@@ -286,6 +286,7 @@ class BlockHash:
 
     def __init__(self, response: BlockHashType) -> None:
         self.blockhash = response['blockhash']
+        self.last_valid_block_height = response.get('lastValidBlockHeight')
         if "feeCalculator" in response:
             self.fee_calculator = FeeCalculator(response['feeCalculator'])
         else:

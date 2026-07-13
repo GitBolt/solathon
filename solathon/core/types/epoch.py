@@ -24,7 +24,7 @@ class Epoch:
         self.block_height = response['blockHeight']
         self.slot_index = response['slotIndex']
         self.slots_in_epoch = response['slotsInEpoch']
-        self.transaction_count = response['transactionCount']
+        self.transaction_count = response.get('transactionCount')
 
     def __repr__(self) -> str:
         return f"Epoch(epoch={self.epoch!r}, absolute_slot={self.absolute_slot!r}, block_height={self.block_height!r}, slot_index={self.slot_index!r})"

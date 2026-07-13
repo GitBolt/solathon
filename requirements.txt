@@ -1,17 +1,15 @@
-anyio==4.6.2.post1
-base58==2.1.1
-certifi==2024.8.30
-cffi==1.17.1
-construct==2.10.70
-exceptiongroup==1.2.2
-h11==0.14.0
-httpcore==1.0.7
-httpx==0.27.2
-idna==3.10
-pillow==11.0.0
-pycparser==2.22
-pynacl==1.5.0
-pypng==0.20220715.0
-qrcode==7.4.2
-sniffio==1.3.1
-typing-extensions==4.12.2
+anyio==4.14.2 ; python_version >= "3.10" and python_version < "4.0"
+base58==2.1.1 ; python_version >= "3.10" and python_version < "4.0"
+certifi==2026.6.17 ; python_version >= "3.10" and python_version < "4.0"
+cffi==2.1.0 ; python_version >= "3.10" and python_version < "4.0" and platform_python_implementation != "PyPy"
+colorama==0.4.6 ; python_version >= "3.10" and python_version < "4.0" and sys_platform == "win32"
+exceptiongroup==1.3.1 ; python_version == "3.10"
+h11==0.16.0 ; python_version >= "3.10" and python_version < "4.0"
+httpcore==1.0.9 ; python_version >= "3.10" and python_version < "4.0"
+httpx==0.28.1 ; python_version >= "3.10" and python_version < "4.0"
+idna==3.18 ; python_version >= "3.10" and python_version < "4.0"
+pillow==12.3.0 ; python_version >= "3.10" and python_version < "4.0"
+pycparser==3.0 ; python_version >= "3.10" and python_version < "4.0" and platform_python_implementation != "PyPy" and implementation_name != "PyPy"
+pynacl==1.6.2 ; python_version >= "3.10" and python_version < "4.0"
+qrcode==8.2 ; python_version >= "3.10" and python_version < "4.0"
+typing-extensions==4.16.0 ; python_version >= "3.10" and python_version < "3.13"

@@ -40,5 +40,8 @@ class PublicKey:
             return self.byte_value == __value.byte_value
         return False
 
+    def __hash__(self) -> int:
+        return hash(self.byte_value)
+
     def base58_encode(self) -> bytes:
         return base58.b58encode(bytes(self))

@@ -38,7 +38,7 @@ class RPCResponse(TypedDict):
     result: Any
     error: RPCErrorType
 
-Commitment = Literal["processed", "confirmed", "finalized", "recent", "single", "singleGossip", "root", "max"]
+Commitment = Literal["processed", "confirmed", "finalized"]
 CommitmentConfig = Literal["processed", "confirmed", "finalized"]
 
 class PubKeyIdentityType(TypedDict):
@@ -78,7 +78,7 @@ class RecentPerformanceSamplesType(TypedDict):
     numSlots: int
     numTransactions: int
     samplePeriodSecs: int
-    numNonVoteTransaction: int
+    numNonVoteTransactions: int
 
 class RecentPerformanceSamples:
     '''
@@ -89,7 +89,8 @@ class RecentPerformanceSamples:
         self.num_slots = response['numSlots']
         self.num_transactions = response['numTransactions']
         self.sample_period_secs = response['samplePeriodSecs']
-        self.num_non_vote_transaction = response['numNonVoteTransaction']
+        self.num_non_vote_transactions = response['numNonVoteTransactions']
+        self.num_non_vote_transaction = self.num_non_vote_transactions
 
 class TransactionSignatureType(TypedDict):
     '''
@@ -153,4 +154,4 @@ class Supply:
         self.total = response['total']
         self.circulating = response['circulating']
         self.non_circulating = response['nonCirculating']
-        self.non_circulating_accounts = response['nonCirculatingAccounts']
+        self.non_circulating_accounts = response.get('nonCirculatingAccounts', [])

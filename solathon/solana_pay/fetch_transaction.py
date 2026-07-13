@@ -19,7 +19,7 @@ def fetch_transaction(client: Client, account: PublicKey, link: str, commitment:
         client (Client): A connection client to the cluster.
         account (PublicKey): Account that may sign the transaction.
         link (str): [Solana Pay Spec](https://github.com/solana-labs/solana-pay/blob/master/SPEC.md#link) link to fetch the transaction from.
-        commitment (Commitment, optional): Commitment option for `getRecentBlockhash`.
+        commitment (Commitment, optional): Commitment option for `getLatestBlockhash`.
 
     Raises:
         ValueError: If `transaction` is not found in the response.
