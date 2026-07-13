@@ -41,7 +41,7 @@ def test_sol_to_lamport_none_passed_in():
 def test_sol_to_lamport_negative_input(arg, expected):
     actual = utils.sol_to_lamport(arg)
     assert actual == expected
-    assert isinstance(expected, int)
+    assert isinstance(actual, int)
 
 
 def test_sol_to_lamport_large_input():
@@ -65,7 +65,7 @@ def test_lamport_to_sol_none_passed_in():
 def test_lamport_to_sol_negative_input(arg, expected):
     actual = utils.lamport_to_sol(arg)
     assert actual == expected
-    assert isinstance(expected, float)
+    assert isinstance(actual, float)
 
 
 def test_lamport_to_sol_large_input():
