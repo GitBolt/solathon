@@ -1,0 +1,57 @@
+---
+title: Validate Transfer
+description: Validate a SOL, classic SPL Token, or basic Token-2022 Solana Pay payment.
+---
+
+import { Callout } from 'nextra/components'
+import { Code } from '../../../components/Code'
+
+# Validate a Transfer
+
+<Code>
+```python
+def validate_transfer(
+    client: Client,
+    signature: str,
+    transfer_fields: CreateTransferFields,
+    commitment: Commitment | None = "confirmed",
+    *,
+    max_supported_transaction_version: int | None = 0,
+) -> TransactionElement: ...
+```
+</Code>
+
+<Code>
+```python
+from decimal import Decimal
+
+from solathon.solana_pay import find_reference, validate_transfer
+
+fields = {
+    "recipient": merchant_wallet,
+    "amount": Decimal("0.01"),
+    "reference": [reference],
+    "memo": "order-1042",
+}
+
+found = find_reference(client, reference, commitment="confirmed")
+transaction = validate_transfer(
+    client,
+    found.signature,
+    fields,
+    commitment="confirmed",
+)
+```
+</Code>
+
+Validation supports native SOL, classic SPL Token, and basic Token-2022
+payments. It checks transaction success, source/authority signing and account
+writability, recipient or derived recipient ATA, mint/program, exact amount,
+ordered read-only reference accounts, optional memo placement/content, and the
+recipient's native or token balance increase.
+
+<Callout type="warning">
+  Set `max_supported_transaction_version` only to a version your application
+  and target RPC node support. Token validation requires the RPC response to
+  include unique pre/post token balance entries for the destination account.
+</Callout>

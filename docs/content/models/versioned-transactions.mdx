@@ -1,0 +1,116 @@
+---
+title: Versioned Transactions
+description: Compile and sign Solana v0 and forward-compatible v1 transactions.
+---
+
+import { Callout } from 'nextra/components'
+import { Code } from '../../components/Code'
+
+# Versioned Transactions
+
+Solathon delegates versioned message compilation, validation, signatures, and
+wire encoding to solders. `VersionedTransaction` accepts `MessageV0` and
+`MessageV1` plus either Solathon or solders keypairs.
+
+## Version 0
+
+Version 0 supports Address Lookup Tables (ALTs) and keeps the 1,232-byte packet
+limit.
+
+<Code>
+```python
+from solathon import Client, Keypair, MessageV0, VersionedTransaction
+
+sender = Keypair.from_file("~/.config/solana/id.json")
+
+with Client(endpoint) as client:
+    latest = client.get_latest_blockhash(commitment="confirmed")
+    message = MessageV0.compile(
+        payer=sender.public_key,
+        instructions=[instruction],
+        recent_blockhash=latest.blockhash,
+    )
+    transaction = VersionedTransaction(message, signers=[sender])
+    signature = client.send_and_confirm_transaction(
+        transaction,
+        commitment="confirmed",
+        last_valid_block_height=latest.last_valid_block_height,
+    )
+```
+</Code>
+
+Load an ALT's base64 RPC data before passing it to the compiler:
+
+<Code>
+```python
+import base64
+
+from solathon import AddressLookupTableAccount
+
+account = client.get_account_info(lookup_table_address, encoding="base64")
+table_data = base64.b64decode(account.data[0], validate=True)
+lookup_table = AddressLookupTableAccount.from_account_data(
+    lookup_table_address,
+    table_data,
+)
+
+message = MessageV0.compile(
+    payer=sender.public_key,
+    instructions=instructions,
+    recent_blockhash=latest.blockhash,
+    lookup_tables=[lookup_table],
+)
+```
+</Code>
+
+## Version 1
+
+Version 1 is a forward-compatible implementation of Solana's larger
+transaction format. It supports up to 4,096 wire bytes and 64 inline accounts,
+but it does **not** support Address Lookup Tables.
+
+<Code>
+```python
+from solathon import MessageV1, TransactionConfig, VersionedTransaction
+
+config = TransactionConfig(
+    priority_fee=5_000,
+    compute_unit_limit=300_000,
+    loaded_accounts_data_size_limit=128_000,
+)
+message = MessageV1.compile(
+    payer=sender.public_key,
+    instructions=[instruction],
+    recent_blockhash=latest.blockhash,
+    config=config,
+)
+transaction = VersionedTransaction(message, signers=[sender])
+```
+</Code>
+
+`priority_fee` is the total priority fee in lamports for the v1 transaction,
+not a per-compute-unit micro-lamport price. The compute-unit and loaded-account
+data limits must both be explicit and positive.
+
+<Callout type="warning">
+  Public Solana clusters did not support transaction v1 when Solathon 2.0 was
+  prepared. Do not submit v1 transactions until the target cluster advertises
+  support. Compute Budget Program instructions are ignored by the v1 runtime,
+  so Solathon rejects them and requires inline `TransactionConfig` values.
+</Callout>
+
+## External signatures and decoding
+
+<Code>
+```python
+message_bytes = message.serialize()
+transaction = VersionedTransaction.populate(message, signatures)
+
+wire_bytes = transaction.serialize()
+decoded = VersionedTransaction.from_buffer(wire_bytes)
+native = decoded.to_solders()
+```
+</Code>
+
+`serialize(require_all_signatures=False)` permits missing signatures but still
+verifies every signature that is present.

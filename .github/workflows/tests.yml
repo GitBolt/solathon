@@ -1,0 +1,78 @@
+name: Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: poetry.lock
+      - name: Install Poetry
+        run: python -m pip install poetry==2.4.2
+      - name: Install dependencies
+        run: poetry install --with dev --all-extras
+      - name: Test
+        run: poetry run pytest --cov=solathon --cov-report=term-missing
+
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: poetry.lock
+      - name: Install Poetry
+        run: python -m pip install poetry==2.4.2
+      - name: Install dependencies
+        run: poetry install --with dev --all-extras
+      - name: Lint and formatting
+        run: |
+          poetry run ruff format --check .
+          poetry run ruff check .
+      - name: Audit dependencies
+        run: poetry run pip-audit
+      - name: Build and smoke-test distributions
+        run: |
+          poetry check --lock
+          poetry build
+          python -m venv /tmp/solathon-wheel-test
+          /tmp/solathon-wheel-test/bin/python -m pip install dist/*.whl
+          /tmp/solathon-wheel-test/bin/python -m pip check
+          cd /tmp
+          /tmp/solathon-wheel-test/bin/python -c "import importlib.util, sys; import solathon; assert solathon.__version__ == '2.0.0'; assert 'qrcode' not in sys.modules; assert importlib.util.find_spec('qrcode') is None"
+
+  docs:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: docs
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
+      - name: Install documentation dependencies
+        run: npm ci
+      - name: Audit documentation dependencies
+        run: npm audit
+      - name: Build documentation
+        run: npm run build

@@ -1,0 +1,49 @@
+---
+title: PublicKey
+description: Immutable Solana public keys and program-derived addresses.
+---
+
+import { Code } from '../../components/Code'
+
+# PublicKey
+
+`PublicKey` is an immutable, hashable wrapper around the native solders
+`Pubkey`. It accepts base58 text, exactly 32 bytes, an integer, a sequence of 32
+byte values, or an existing solders public key.
+
+<Code>
+```python
+from solathon import PublicKey
+
+address = PublicKey("11111111111111111111111111111111")
+
+str(address)                  # base58 text
+bytes(address)                # 32 raw bytes
+address.byte_value            # the same immutable bytes
+address.is_on_curve()         # False for most program-derived addresses
+native_address = address.to_solders()
+```
+</Code>
+
+`base58_encode()` remains available for compatibility and returns base58 as
+bytes. Prefer `str(address)` for text.
+
+## Program-derived addresses
+
+<Code>
+```python
+program_id = PublicKey("BPFLoaderUpgradeab1e11111111111111111111111")
+pda, bump = PublicKey.find_program_address([b"vault"], program_id)
+```
+</Code>
+
+Seeded addresses and explicit program addresses are also available:
+
+<Code>
+```python
+seeded = PublicKey.create_with_seed(base_public_key, "profile", program_id)
+pda = PublicKey.create_program_address([b"vault", bytes([bump])], program_id)
+```
+</Code>
+
+A PDA can contain at most 16 seeds and each seed can contain at most 32 bytes.

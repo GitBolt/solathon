@@ -1,36 +1,36 @@
-from solathon.publickey import PublicKey
+from __future__ import annotations
+
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import List, TypedDict, Optional, Union
+from decimal import Decimal
+from typing import NotRequired, Required, TypedDict
+
+from ..publickey import PublicKey
+
+Amount = Decimal | int | float | str
 
 
 class CreateTransferFields(TypedDict):
-    """
-    Parameters for creating a transfer
-
-    Args
-        recipient (PublicKey) - Account that will receive the transfer.
-        amount (float) - Amount to be transferred in Sol.
-        reference (List[PublicKey], optional) - List of accounts to be referenced in the transfer.
-    """
-
-    recipient: PublicKey
-    amount: float
-    reference: Optional[Union[List[PublicKey], PublicKey]]
-    # memo: Optional[str]
+    recipient: Required[PublicKey]
+    amount: Required[Amount]
+    reference: NotRequired[Sequence[PublicKey] | PublicKey]
+    memo: NotRequired[str]
+    spl_token: NotRequired[PublicKey]
 
 
-@dataclass
-class TransactionRequestURL():
+@dataclass(frozen=True, slots=True)
+class TransactionRequestURL:
     link: str
-    label: Optional[str]
-    message: Optional[str]
+    label: str | None
+    message: str | None
 
 
-@dataclass
-class TransferRequestURL():
-    recipient: str
-    amount: Optional[float]
-    label: Optional[str]
-    message: Optional[str]
-    # memo: Optional[str]
-    reference: Optional[Union[List[str], str]]
+@dataclass(frozen=True, slots=True)
+class TransferRequestURL:
+    recipient: PublicKey
+    amount: Decimal | None
+    label: str | None
+    message: str | None
+    memo: str | None
+    reference: list[PublicKey]
+    spl_token: PublicKey | None

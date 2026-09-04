@@ -1,0 +1,25 @@
+---
+title: Transfer Request URL Params
+---
+
+# Transfer Request URL Params
+
+The `TransferRequestURLParams` input dictionary accepted by `encode_url`
+contains:
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `recipient` | `PublicKey \| str` | Yes |
+| `amount` | `Decimal \| int \| float \| str` | No |
+| `spl_token` | `PublicKey \| str` | No |
+| `reference` | `Sequence[PublicKey \| str] \| PublicKey \| str` | No |
+| `label` | `str` | No |
+| `message` | `str` | No |
+| `memo` | `str` | No |
+
+For native SOL, `amount` is denominated in SOL and may contain at most nine
+decimal places. With `spl_token`, it is denominated in that mint's user unit.
+
+`parse_url` returns an immutable `TransferRequestURL` dataclass. Its `amount`
+is `Decimal | None`, key fields are `PublicKey`, and `reference` is always a
+list.

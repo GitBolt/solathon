@@ -1,14 +1,18 @@
-# Developer reference: https://github.com/solana-labs/solana/blob/master/sdk/program/src/system_instruction.rs
 from __future__ import annotations
 
-from typing import NamedTuple, List
 from dataclasses import dataclass
+from typing import NamedTuple
+
 from ..publickey import PublicKey
-from ..core.layouts import (
+from .layouts import (
+    SYSTEM_PROGRAM_ID,
+    SYSVAR_RECENT_BLOCKHASHES_ID,
+    SYSVAR_RENT_ID,
     InstructionType,
-    SYSTEM_INSTRUCTIONS_LAYOUT,
-    SYSTEM_PROGRAM_ID
+    encode_system_instruction,
 )
+
+MEMO_PROGRAM_ID = PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr")
 
 
 @dataclass
@@ -17,9 +21,13 @@ class AccountMeta:
     is_signer: bool
     is_writable: bool
 
+    def __post_init__(self) -> None:
+        if isinstance(self.public_key, str):
+            self.public_key = PublicKey(self.public_key)
+
 
 class Instruction(NamedTuple):
-    keys: List[AccountMeta]
+    keys: list[AccountMeta]
     program_id: PublicKey
     data: bytes = bytes(0)
 
@@ -27,169 +35,169 @@ class Instruction(NamedTuple):
         return {
             "keys": [
                 {
-                    "pubkey": key.public_key.base58_encode(),
+                    "pubkey": str(key.public_key),
                     "isSigner": key.is_signer,
-                    "isWritable": key.is_writable
+                    "isWritable": key.is_writable,
                 }
                 for key in self.keys
             ],
-            "programId": self.program_id.base58_encode(),
-            "data": list(self.data)
+            "programId": str(self.program_id),
+            "data": list(self.data),
         }
 
-def create_account(
-        from_public_key: PublicKey,
-        new_account_public_key: PublicKey,
-        lamports: int,
-        space: int,
-        program_id: PublicKey
+
+def create_memo(
+    memo: str,
+    signer_public_keys: list[PublicKey] | None = None,
 ) -> Instruction:
-    account_metas: List[AccountMeta] = [
-        AccountMeta(
-            public_key=from_public_key,
-            is_signer=True,
-            is_writable=True
-        ),
-        AccountMeta(
-            public_key=new_account_public_key,
-            is_signer=True,
-            is_writable=True
-        ),
-    ]
-    data: bytes = SYSTEM_INSTRUCTIONS_LAYOUT.build(
-        dict(
-            type=InstructionType.CREATE_ACCOUNT,
-            args=dict(
-                lamports=lamports, space=space,
-                program_id=bytes(program_id)
-            ),
-        )
-    )
+    if not isinstance(memo, str):
+        raise TypeError("memo must be a string")
+    memo_data = memo.encode("utf-8")
+    if not memo_data:
+        raise ValueError("memo cannot be empty")
     return Instruction(
-        keys=account_metas,
+        keys=[
+            AccountMeta(public_key, is_signer=True, is_writable=False)
+            for public_key in signer_public_keys or []
+        ],
+        program_id=MEMO_PROGRAM_ID,
+        data=memo_data,
+    )
+
+
+def create_account(
+    from_public_key: PublicKey,
+    new_account_public_key: PublicKey,
+    lamports: int,
+    space: int,
+    program_id: PublicKey,
+) -> Instruction:
+    return Instruction(
+        keys=[
+            AccountMeta(from_public_key, is_signer=True, is_writable=True),
+            AccountMeta(new_account_public_key, is_signer=True, is_writable=True),
+        ],
         program_id=SYSTEM_PROGRAM_ID,
-        data=data,
+        data=encode_system_instruction(
+            InstructionType.CREATE_ACCOUNT,
+            lamports=lamports,
+            space=space,
+            program_id=program_id,
+        ),
     )
 
 
 def create_account_with_seed(
-        from_public_key: PublicKey,
-        new_account_public_key: PublicKey,
-        base_public_key: PublicKey,
-        seed: str,
-        lamports: int,
-        space: int,
-        program_id: PublicKey
+    from_public_key: PublicKey,
+    new_account_public_key: PublicKey,
+    base_public_key: PublicKey,
+    seed: str,
+    lamports: int,
+    space: int,
+    program_id: PublicKey,
 ) -> Instruction:
-    account_metas: List[AccountMeta] = [
-        AccountMeta(
-            public_key=from_public_key,
-            is_signer=True,
-            is_writable=True
-        ),
-        AccountMeta(
-            public_key=new_account_public_key,
-            is_signer=False,
-            is_writable=True
-        ),
+    keys = [
+        AccountMeta(from_public_key, is_signer=True, is_writable=True),
+        AccountMeta(new_account_public_key, is_signer=False, is_writable=True),
     ]
-    
-    data: bytes = SYSTEM_INSTRUCTIONS_LAYOUT.build(
-        dict(
-            type=InstructionType.CREATE_ACCOUNT_WITH_SEED,
-            args=dict(
-                base=bytes(base_public_key),
-                seed=seed,
-                lamports=lamports,
-                space=space,
-                program_id=bytes(program_id),
-            ),
-        )
-    )
-
     if base_public_key != from_public_key:
-        account_metas.append(AccountMeta(
-            public_key=base_public_key,
-            is_signer=True,
-            is_writable=False
-        ))
+        keys.append(AccountMeta(base_public_key, is_signer=True, is_writable=False))
     return Instruction(
-        keys=account_metas, program_id=SYSTEM_PROGRAM_ID, data=data
+        keys=keys,
+        program_id=SYSTEM_PROGRAM_ID,
+        data=encode_system_instruction(
+            InstructionType.CREATE_ACCOUNT_WITH_SEED,
+            base=base_public_key,
+            seed=seed,
+            lamports=lamports,
+            space=space,
+            program_id=program_id,
+        ),
     )
 
 
-def assign(
-        account_public_key: PublicKey,
-        program_id: PublicKey
+def assign(account_public_key: PublicKey, program_id: PublicKey) -> Instruction:
+    return Instruction(
+        keys=[AccountMeta(account_public_key, is_signer=True, is_writable=True)],
+        program_id=SYSTEM_PROGRAM_ID,
+        data=encode_system_instruction(
+            InstructionType.ASSIGN,
+            program_id=program_id,
+        ),
+    )
+
+
+def assign_with_seed(
+    account_public_key: PublicKey,
+    base_public_key: PublicKey,
+    seed: str,
+    program_id: PublicKey,
 ) -> Instruction:
-
-    data = SYSTEM_INSTRUCTIONS_LAYOUT.build(
-        dict(type=InstructionType.ASSIGN,
-             args=dict(program_id=bytes(program_id)
-                       ))
-    )
     return Instruction(
         keys=[
-            AccountMeta(
-                public_key=account_public_key,
-                is_signer=True,
-                is_writable=True
-            ),
+            AccountMeta(account_public_key, is_signer=False, is_writable=True),
+            AccountMeta(base_public_key, is_signer=True, is_writable=False),
         ],
         program_id=SYSTEM_PROGRAM_ID,
-        data=data,
+        data=encode_system_instruction(
+            InstructionType.ASSIGN_WITH_SEED,
+            base=base_public_key,
+            seed=seed,
+            program_id=program_id,
+        ),
     )
-
-
-# Need to implement assign_with_seed_here
 
 
 def transfer(
-        from_public_key: PublicKey | str,
-        to_public_key: PublicKey | str,
-        lamports: int
+    from_public_key: PublicKey | str,
+    to_public_key: PublicKey | str,
+    lamports: int,
 ) -> Instruction:
-    account_metas: List[AccountMeta] = [
-        AccountMeta(
-            public_key=from_public_key,
-            is_signer=True,
-            is_writable=True
-        ),
-        AccountMeta(
-            public_key=to_public_key,
-            is_signer=False,
-            is_writable=True
-        ),
-    ]
-    data: bytes = SYSTEM_INSTRUCTIONS_LAYOUT.build(
-        dict(
-            type=InstructionType.TRANSFER,
-            args=dict(lamports=lamports)
-        )
-    )
     return Instruction(
-        keys=account_metas,
+        keys=[
+            AccountMeta(from_public_key, is_signer=True, is_writable=True),
+            AccountMeta(to_public_key, is_signer=False, is_writable=True),
+        ],
         program_id=SYSTEM_PROGRAM_ID,
-        data=data,
+        data=encode_system_instruction(
+            InstructionType.TRANSFER,
+            lamports=lamports,
+        ),
     )
 
 
-def allocate(
-        account_public_key: PublicKey,
-        space: int
+def transfer_with_seed(
+    from_public_key: PublicKey,
+    base_public_key: PublicKey,
+    from_seed: str,
+    from_owner: PublicKey,
+    to_public_key: PublicKey,
+    lamports: int,
 ) -> Instruction:
-
-    data: bytes = SYSTEM_INSTRUCTIONS_LAYOUT.build(
-        dict(type=InstructionType.ALLOCATE, args=dict(space=space))
-    )
     return Instruction(
-        keys=[AccountMeta(
-            public_key=account_public_key,
-            is_signer=True,
-            is_writable=True
-        )],
+        keys=[
+            AccountMeta(from_public_key, is_signer=False, is_writable=True),
+            AccountMeta(base_public_key, is_signer=True, is_writable=False),
+            AccountMeta(to_public_key, is_signer=False, is_writable=True),
+        ],
         program_id=SYSTEM_PROGRAM_ID,
-        data=data,
+        data=encode_system_instruction(
+            InstructionType.TRANSFER_WITH_SEED,
+            lamports=lamports,
+            from_seed=from_seed,
+            from_owner=from_owner,
+        ),
+    )
+
+
+def allocate(account_public_key: PublicKey, space: int) -> Instruction:
+    return Instruction(
+        keys=[AccountMeta(account_public_key, is_signer=True, is_writable=True)],
+        program_id=SYSTEM_PROGRAM_ID,
+        data=encode_system_instruction(
+            InstructionType.ALLOCATE,
+            space=space,
+        ),
     )
 
 
@@ -198,26 +206,138 @@ def allocate_with_seed(
     base_public_key: PublicKey,
     seed: str,
     space: int,
-    program_id: PublicKey
+    program_id: PublicKey,
 ) -> Instruction:
-
-    data: bytes = SYSTEM_INSTRUCTIONS_LAYOUT.build(
-        dict(
-            type=InstructionType.ALLOCATE_WITH_SEED,
-            args=dict(
-                base=bytes(base_public_key),
-                seed=seed,
-                space=space,
-                program_id=bytes(program_id),
-            ),
-        )
-    )
     return Instruction(
-        keys=[AccountMeta(
-            public_key=account_public_key,
-            is_signer=True,
-            is_writable=True
-        )],
+        keys=[
+            AccountMeta(account_public_key, is_signer=False, is_writable=True),
+            AccountMeta(base_public_key, is_signer=True, is_writable=False),
+        ],
         program_id=SYSTEM_PROGRAM_ID,
-        data=data,
+        data=encode_system_instruction(
+            InstructionType.ALLOCATE_WITH_SEED,
+            base=base_public_key,
+            seed=seed,
+            space=space,
+            program_id=program_id,
+        ),
+    )
+
+
+def advance_nonce_account(
+    nonce_public_key: PublicKey,
+    authority_public_key: PublicKey,
+) -> Instruction:
+    return Instruction(
+        keys=[
+            AccountMeta(nonce_public_key, is_signer=False, is_writable=True),
+            AccountMeta(
+                SYSVAR_RECENT_BLOCKHASHES_ID, is_signer=False, is_writable=False
+            ),
+            AccountMeta(authority_public_key, is_signer=True, is_writable=False),
+        ],
+        program_id=SYSTEM_PROGRAM_ID,
+        data=encode_system_instruction(InstructionType.ADVANCE_NONCE_ACCOUNT),
+    )
+
+
+def withdraw_nonce_account(
+    nonce_public_key: PublicKey,
+    recipient_public_key: PublicKey,
+    authority_public_key: PublicKey,
+    lamports: int,
+) -> Instruction:
+    return Instruction(
+        keys=[
+            AccountMeta(nonce_public_key, is_signer=False, is_writable=True),
+            AccountMeta(recipient_public_key, is_signer=False, is_writable=True),
+            AccountMeta(
+                SYSVAR_RECENT_BLOCKHASHES_ID, is_signer=False, is_writable=False
+            ),
+            AccountMeta(SYSVAR_RENT_ID, is_signer=False, is_writable=False),
+            AccountMeta(authority_public_key, is_signer=True, is_writable=False),
+        ],
+        program_id=SYSTEM_PROGRAM_ID,
+        data=encode_system_instruction(
+            InstructionType.WITHDRAW_NONCE_ACCOUNT,
+            lamports=lamports,
+        ),
+    )
+
+
+def initialize_nonce_account(
+    nonce_public_key: PublicKey,
+    authority_public_key: PublicKey,
+) -> Instruction:
+    return Instruction(
+        keys=[
+            AccountMeta(nonce_public_key, is_signer=False, is_writable=True),
+            AccountMeta(
+                SYSVAR_RECENT_BLOCKHASHES_ID, is_signer=False, is_writable=False
+            ),
+            AccountMeta(SYSVAR_RENT_ID, is_signer=False, is_writable=False),
+        ],
+        program_id=SYSTEM_PROGRAM_ID,
+        data=encode_system_instruction(
+            InstructionType.INITIALIZE_NONCE_ACCOUNT,
+            authorized=authority_public_key,
+        ),
+    )
+
+
+def authorize_nonce_account(
+    nonce_public_key: PublicKey,
+    authority_public_key: PublicKey,
+    new_authority_public_key: PublicKey,
+) -> Instruction:
+    return Instruction(
+        keys=[
+            AccountMeta(nonce_public_key, is_signer=False, is_writable=True),
+            AccountMeta(authority_public_key, is_signer=True, is_writable=False),
+        ],
+        program_id=SYSTEM_PROGRAM_ID,
+        data=encode_system_instruction(
+            InstructionType.AUTHORIZE_NONCE_ACCOUNT,
+            authorized=new_authority_public_key,
+        ),
+    )
+
+
+def upgrade_nonce_account(nonce_public_key: PublicKey) -> Instruction:
+    """Upgrade a legacy durable-nonce account to the current format."""
+
+    return Instruction(
+        keys=[AccountMeta(nonce_public_key, is_signer=False, is_writable=True)],
+        program_id=SYSTEM_PROGRAM_ID,
+        data=encode_system_instruction(InstructionType.UPGRADE_NONCE_ACCOUNT),
+    )
+
+
+def create_account_allow_prefund(
+    new_account_public_key: PublicKey,
+    lamports: int,
+    space: int,
+    program_id: PublicKey,
+    payer_public_key: PublicKey | None = None,
+) -> Instruction:
+    """Create an account even when its address already holds lamports.
+
+    If ``payer_public_key`` is omitted, the destination must already be
+    sufficiently funded and the instruction encodes a funding amount of zero.
+    This instruction requires a current Agave runtime that supports system
+    instruction 13.
+    """
+
+    keys = [AccountMeta(new_account_public_key, is_signer=True, is_writable=True)]
+    if payer_public_key is not None:
+        keys.append(AccountMeta(payer_public_key, is_signer=True, is_writable=True))
+    return Instruction(
+        keys=keys,
+        program_id=SYSTEM_PROGRAM_ID,
+        data=encode_system_instruction(
+            InstructionType.CREATE_ACCOUNT_ALLOW_PREFUND,
+            lamports=lamports if payer_public_key is not None else 0,
+            space=space,
+            program_id=program_id,
+        ),
     )

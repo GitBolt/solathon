@@ -1,4 +1,9 @@
 .idea/
+.coverage
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.DS_Store
 __pycache__/
 __pypackages__/
 mypy_cache/
@@ -11,9 +16,3 @@ env3/
 .ipynb_checkpoints
 package_test/
 .history/*
-
-
-
-
-
-

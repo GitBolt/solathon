@@ -1,0 +1,20 @@
+---
+title: Transaction Element
+---
+
+# Transaction Element
+
+`TransactionElement` is the typed model returned by `get_transaction` and
+`validate_transfer` for JSON transaction encoding.
+
+| Attribute | Meaning |
+| --- | --- |
+| `transaction` | Signatures plus the parsed message, including optional v0 lookups or v1 `transaction_config`. |
+| `meta` | Fee, status, balances, logs, inner instructions, loaded addresses, return data, and compute/cost information; may be `None`. |
+| `block_time` | Optional Unix timestamp. |
+| `slot` | Slot in which the transaction was processed. |
+| `version` | `"legacy"`, `0`, or `1` when supplied by the RPC node. |
+| `raw` | Original RPC dictionary. |
+
+Non-JSON encodings are intentionally returned as raw dictionaries because
+their transaction field has a different shape.

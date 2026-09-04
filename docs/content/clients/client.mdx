@@ -1,0 +1,200 @@
+---
+title: Client
+description: Synchronous access to the Solana HTTP JSON-RPC API.
+---
+
+import { Callout } from 'nextra/components'
+import { Code } from '../../components/Code'
+
+# Client
+
+`Client` is the synchronous Solana HTTP JSON-RPC client. It owns a pooled
+`httpx.Client` by default and can also accept an existing transport.
+
+<Code>
+```python
+class Client:
+    def __init__(
+        self,
+        endpoint: str,
+        local: bool = False,
+        clean_response: bool = True,
+        timeout: float = 30.0,
+        http_client: httpx.Client | None = None,
+    ): ...
+```
+</Code>
+
+- `endpoint` accepts any HTTP or HTTPS RPC URL. Set `local=True` only when you
+  intentionally need to bypass URL validation for a local test transport.
+- `clean_response=True` unwraps the JSON-RPC envelope and returns Solathon
+  models or plain values. Set it to `False` for the complete RPC response.
+- `timeout` configures the internally managed HTTP client.
+- `http_client` supports dependency injection; Solathon does not take
+  ownership of an injected client.
+
+Use the context manager whenever Solathon creates the HTTP transport:
+
+<Code>
+```python
+from solathon import Client, PublicKey
+
+address = PublicKey("B3BhJ1nvPvEhx3hq3nfK8hx4WYcKZdbhavSobZEA44ai")
+
+with Client("https://api.mainnet-beta.solana.com") as client:
+    balance = client.get_balance(address, commitment="confirmed")
+```
+</Code>
+
+## Response modes
+
+<Code>
+```python
+from solathon import Client
+
+with Client(endpoint) as client:
+    lamports = client.get_balance(address)
+
+with Client(endpoint, clean_response=False) as client:
+    rpc_envelope = client.get_balance(address)
+```
+</Code>
+
+The cleaned client raises `RPCRequestError` for JSON-RPC failures rather than
+returning an error dictionary.
+
+## RPC methods
+
+The client covers the current Solana HTTP RPC surface in these groups:
+
+- **Accounts:** `get_account_info`, `get_balance`, `get_multiple_accounts`,
+  `get_program_accounts`, `get_largest_accounts`, and
+  `get_minimum_balance_for_rent_exemption`.
+- **Blocks:** `get_block`, `get_block_height`, `get_block_production`,
+  `get_block_commitment`, `get_blocks`, `get_blocks_with_limit`,
+  `get_block_time`, `get_latest_blockhash`, and `is_blockhash_valid`.
+- **Cluster and nodes:** `get_cluster_nodes`, `get_epoch_info`,
+  `get_epoch_schedule`, `get_first_available_block`, `get_genesis_hash`,
+  `get_health`, `get_identity`, `get_version`, `get_highest_snapshot_slot`,
+  `get_leader_schedule`, `get_max_retransmit_slot`,
+  `get_max_shred_insert_slot`, `get_slot`, `get_slot_leader`,
+  `get_slot_leaders`, `minimum_ledger_slot`, and `get_vote_accounts`.
+- **Fees, inflation, and supply:** `get_fee_for_message`,
+  `get_recent_prioritization_fees`, `get_inflation_governor`,
+  `get_inflation_rate`, `get_inflation_reward`, `get_supply`, and
+  `get_stake_minimum_delegation`.
+- **Tokens:** `get_token_accounts_by_owner`,
+  `get_token_accounts_by_delegate`, `get_all_token_accounts_by_owner`,
+  `get_token_account_balance`, `get_token_supply`, and
+  `get_token_largest_accounts`.
+- **Transactions:** `get_transaction`, `get_transaction_count`,
+  `get_signatures_for_address`, `get_signature_statuses`,
+  `get_recent_performance_samples`, `simulate_transaction`,
+  `request_airdrop`, `send_transaction`, `send_raw_transaction`,
+  `confirm_transaction`, and `send_and_confirm_transaction`.
+
+For the exact RPC meaning and accepted configuration values, use the
+[canonical Solana HTTP RPC reference](https://solana.com/docs/rpc/http).
+
+### `get_block` result shapes
+
+`get_block` returns a typed `Block` only for JSON/JSON-parsed responses with
+`transaction_details="full"` (or the default full shape). Other valid RPC
+shapes are returned as dictionaries even when `clean_response=True`:
+
+<Code>
+```python
+full_block = client.get_block(slot, transaction_details="full")
+account_lists = client.get_block(slot, transaction_details="accounts")
+signatures = client.get_block(slot, transaction_details="signatures")
+metadata_only = client.get_block(slot, transaction_details="none")
+```
+</Code>
+
+This avoids coercing the `accounts`, `signatures`, and `none` variants into a
+model whose `transactions` field has a different schema.
+
+## Batch requests
+
+Batching shares a single HTTP round trip and preserves request order in the
+returned list.
+
+<Code>
+```python
+with Client(endpoint) as client:
+    balance, slot = client.send_batch(
+        [
+            ("getBalance", [str(address)]),
+            ("getSlot", [{"commitment": "confirmed"}]),
+        ]
+    )
+```
+</Code>
+
+## Token and Token-2022 accounts
+
+`get_all_token_accounts_by_owner` queries both token programs in one batch.
+
+<Code>
+```python
+with Client(endpoint) as client:
+    token_accounts = client.get_all_token_accounts_by_owner(
+        owner,
+        commitment="confirmed",
+        encoding="jsonParsed",
+    )
+```
+</Code>
+
+## Sending and confirming safely
+
+Prefer `send_and_confirm_transaction`. When Solathon fetches the blockhash, it
+also tracks `lastValidBlockHeight` and stops polling when the transaction can no
+longer land.
+
+<Code>
+```python
+with Client(endpoint) as client:
+    signature = client.send_and_confirm_transaction(
+        transaction,
+        commitment="confirmed",
+        poll_interval=0.5,
+    )
+```
+</Code>
+
+<Callout type="warning">
+  If a transaction already contains a recent blockhash, pass its matching
+  `last_valid_block_height`. Durable-nonce transactions use a finite `timeout`
+  instead because they do not expire at a last-valid block height.
+</Callout>
+
+## Simulating unsigned transactions
+
+Simulation does not sign a `Transaction` or `VersionedTransaction` unless
+`sig_verify=True`. This makes the default path suitable for unsigned or
+partially signed transactions without triggering signer side effects:
+
+<Code>
+```python
+with Client(endpoint) as client:
+    result = client.simulate_transaction(
+        transaction,
+        commitment="processed",
+        replace_recent_blockhash=True,
+        sig_verify=False,
+    )
+```
+</Code>
+
+`sig_verify=True` signs and verifies the transaction before simulation.
+Solana RPC does not allow signature verification together with
+`replace_recent_blockhash=True`, and Solathon rejects that combination before
+sending the request.
+
+## Versioned responses
+
+Block and transaction RPC requests use `max_supported_transaction_version`.
+Keep this value aligned with the message versions your application can decode.
+Do not request v1 responses from a cluster until that cluster advertises v1
+support.

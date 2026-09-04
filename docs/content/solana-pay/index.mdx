@@ -1,0 +1,34 @@
+---
+title: Solana Pay
+description: Encode, parse, create, fetch, and validate secure Solana payment requests.
+asIndexPage: true
+---
+
+import { Callout } from 'nextra/components'
+
+# Solana Pay
+
+Solathon follows the canonical [Solana Pay
+specification](https://github.com/solana-foundation/pay/blob/main/typescript/packages/solana-pay/docs/src/SPEC.md)
+for transfer URLs and transaction-request URLs.
+
+The v2 helpers cover:
+
+- lossless URL encoding and parsing with `Decimal` amounts;
+- native SOL, classic SPL Token, and basic Token-2022 transfer creation and
+  validation;
+- ordered references and signed memos;
+- safe HTTPS transaction-request fetching without forwarding RPC credentials;
+- optional branded QR generation through `solathon[qr]`.
+
+<Callout type="warning">
+  Basic Token-2022 payments are supported. Creation rejects transfer-fee and
+  transfer-hook extensions, UI-transforming interest/scaled-amount mints,
+  non-transferable or paused state, and unknown extensions where their safety
+  cannot be established. These cases require extension-specific handling.
+</Callout>
+
+Start with [Encode URL](/solana-pay/functions/encode_url), then use
+[Create Transfer](/solana-pay/functions/create_transfer) or [Fetch
+Transaction](/solana-pay/functions/fetch_transaction) for the appropriate
+Solana Pay request type.

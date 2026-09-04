@@ -1,0 +1,118 @@
+---
+title: Legacy Transaction
+description: Build, sign, serialize, and populate legacy Solana transactions.
+---
+
+import { Callout } from 'nextra/components'
+import { Code } from '../../../components/Code'
+
+# Legacy Transaction
+
+`Transaction` represents Solana's legacy transaction format. Use
+`MessageV0`/`VersionedTransaction` when you need address lookup tables, and
+`MessageV1` only when the target cluster supports transaction v1.
+
+<Code>
+```python
+from solathon import Keypair, PublicKey, Transaction
+from solathon.core.instructions import transfer
+
+sender = Keypair.from_file("~/.config/solana/id.json")
+recipient = PublicKey("B3BhJ1nvPvEhx3hq3nfK8hx4WYcKZdbhavSobZEA44ai")
+
+transaction = Transaction(
+    instructions=[
+        transfer(sender.public_key, recipient, lamports=10_000),
+    ],
+    signers=[sender],
+)
+```
+</Code>
+
+## Configuration
+
+The constructor accepts keyword configuration:
+
+| Name | Description |
+| --- | --- |
+| `instructions` | A list of `Instruction` objects. |
+| `signers` | Keypairs or public keys required to sign. |
+| `fee_payer` | Defaults to the first required signer when omitted. |
+| `recent_blockhash` | May be omitted when a client will fetch it before sending. |
+| `nonce_info` | A `NonceInformation` value containing the stored nonce and its advance instruction. |
+| `signatures` | Existing `PKSigPair` values for partial/external signing. |
+
+## Add instructions
+
+<Code>
+```python
+transaction.add_instructions(first_instruction, second_instruction)
+```
+</Code>
+
+The method mutates the transaction and returns it, allowing chaining.
+
+## Signing and serialization
+
+<Code>
+```python
+transaction.recent_blockhash = recent_blockhash
+transaction.sign()
+
+assert transaction.verify_signatures()
+wire_bytes = transaction.serialize()
+```
+</Code>
+
+`serialize(require_all_signatures=True, verify_signatures=True)` enforces all
+required signatures and the 1,232-byte legacy/v0 packet limit by default.
+`serialize_message()` returns only the bytes that signers must sign.
+
+For an external signer, add the verified 64-byte Ed25519 signature:
+
+<Code>
+```python
+message = transaction.serialize_message()
+signature = external_signer(message)
+transaction.add_signature(signer_public_key, signature, message)
+```
+</Code>
+
+Populate a transaction from a decoded `Message` and base58 or byte signatures
+with `Transaction.populate(message, signatures)`.
+
+## Durable nonces
+
+Durable-nonce transactions must use the stored nonce as their blockhash and
+must execute `AdvanceNonceAccount` first. `NonceInformation` enforces that
+shape and prepends the advance instruction during compilation:
+
+<Code>
+```python
+from solathon import NonceInformation, Transaction
+from solathon.core.instructions import advance_nonce_account, transfer
+
+nonce_info = NonceInformation(
+    nonce=stored_nonce,
+    nonce_instruction=advance_nonce_account(
+        nonce_account,
+        nonce_authority.public_key,
+    ),
+)
+transaction = Transaction(
+    fee_payer=payer.public_key,
+    nonce_info=nonce_info,
+    instructions=[transfer(payer.public_key, recipient, 10_000)],
+    signers=[payer, nonce_authority],
+)
+```
+</Code>
+
+When submitting one, give `send_and_confirm_transaction` a finite `timeout`;
+durable nonces do not have a `last_valid_block_height`.
+
+<Callout type="info">
+  `Client.send_transaction` signs and submits once.
+  `Client.send_and_confirm_transaction` additionally follows confirmation and
+  blockhash expiry, and is the safer default for application flows.
+</Callout>

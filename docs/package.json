@@ -1,32 +1,31 @@
 {
-  "name": "solathon",
+  "name": "solathon-docs",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Documentation site for Solathon",
   "repository": {
     "type": "git",
-    "url": "https://github.com/gitbolt/solathon.git"
+    "url": "https://github.com/gitbolt/solathon.git",
+    "directory": "docs"
   },
-  "description": "Documentation site for Solathon",
-  "author": "Gitbolt",
   "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "dev": "cross-env NODE_OPTIONS=--openssl-legacy-provider next",
-    "start": "cross-env NODE_OPTIONS=--openssl-legacy-provider next start",
-    "build": "cross-env NODE_OPTIONS=--openssl-legacy-provider next build"
+    "dev": "next dev",
+    "build": "next build",
+    "postinstall": "node scripts/patch-nextra-layout.mjs",
+    "start": "next start"
   },
   "dependencies": {
-    "next": "^11.0.1",
-    "nextra": "^1.1.0",
-    "nextra-theme-docs": "^1.2.2",
-    "react": "^17.0.1",
-    "react-dom": "^17.0.1",
-    "sass": "^1.43.3",
-    "tailwindcss": "^3.0.18"
+    "next": "~16.3.4",
+    "nextra": "4.6.1",
+    "nextra-theme-docs": "4.6.1",
+    "react": "~19.2.8",
+    "react-dom": "~19.2.8"
   },
-  "devDependencies": {
-    "cross-env": "^7.0.3",
-    "prettier": "^2.0.5"
-  },
-  "prettier": {
-    "semi": false,
-    "singleQuote": true
+  "overrides": {
+    "@xmldom/xmldom": "0.9.12"
   }
 }

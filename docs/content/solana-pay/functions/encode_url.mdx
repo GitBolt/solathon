@@ -1,0 +1,57 @@
+---
+title: Encode URL
+description: Encode transfer and transaction-request Solana Pay URLs.
+---
+
+import { Code } from '../../../components/Code'
+
+# Encode a URL
+
+`encode_url` accepts either a typed dictionary or keyword fields.
+
+<Code>
+```python
+def encode_url(
+    data: TransactionRequestURLParams | TransferRequestURLParams | None = None,
+    **fields,
+) -> str: ...
+```
+</Code>
+
+## Transfer request
+
+<Code>
+```python
+from decimal import Decimal
+
+from solathon.solana_pay import encode_url
+
+url = encode_url(
+    recipient=recipient,
+    amount=Decimal("0.01"),
+    reference=[reference],
+    label="Example store",
+    message="Order 1042",
+    memo="order-1042",
+)
+```
+</Code>
+
+Amounts are encoded as fixed-point decimal text, never scientific notation.
+Native SOL amounts may contain at most nine decimal places. The optional
+`spl_token` field changes the unit to that mint's user-facing token unit.
+
+## Transaction request
+
+<Code>
+```python
+url = encode_url(
+    link="https://merchant.example/solana-pay",
+    label="Example store",
+    message="Approve order 1042",
+)
+```
+</Code>
+
+Transaction-request links must be absolute HTTPS URLs without credentials or
+fragments. A Solana Pay URL cannot exceed 2,048 characters.

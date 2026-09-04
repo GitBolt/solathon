@@ -1,0 +1,130 @@
+---
+title: Tokens and Token-2022
+description: ATA derivation, checked transfers, and extension-aware token state parsing.
+---
+
+import { Callout } from 'nextra/components'
+import { Code } from '../components/Code'
+
+# Tokens and Token-2022
+
+Solathon supports the original SPL Token Program and Token-2022 for the stable
+primitives that can be handled safely without extension-specific account
+resolution.
+
+## Program IDs
+
+<Code>
+```python
+from solathon import TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID
+```
+</Code>
+
+Pass the intended program ID explicitly when operating on Token-2022 state.
+
+## Associated token accounts
+
+<Code>
+```python
+from solathon import (
+    TOKEN_2022_PROGRAM_ID,
+    create_associated_token_account,
+    get_associated_token_address,
+)
+
+ata = get_associated_token_address(
+    owner,
+    mint,
+    token_program_id=TOKEN_2022_PROGRAM_ID,
+)
+create_ata = create_associated_token_account(
+    payer,
+    owner,
+    mint,
+    token_program_id=TOKEN_2022_PROGRAM_ID,
+    idempotent=True,
+)
+```
+</Code>
+
+Idempotent creation is the retry-safe default. Set `idempotent=False` only for
+the original Associated Token Account create variant.
+
+## Exact amounts and checked transfers
+
+Use `Decimal` or decimal text to avoid binary floating-point surprises:
+
+<Code>
+```python
+from decimal import Decimal
+
+from solathon import TOKEN_2022_PROGRAM_ID, token_amount_to_base_units
+from solathon import transfer_checked
+
+amount = token_amount_to_base_units(Decimal("1.25"), decimals=6)
+instruction = transfer_checked(
+    source=source_token_account,
+    mint=mint,
+    destination=destination_token_account,
+    authority=owner,
+    amount=amount,
+    decimals=6,
+    token_program_id=TOKEN_2022_PROGRAM_ID,
+    extensions=[mint_state, source_state, destination_state],
+)
+```
+</Code>
+
+`transfer_checked` accepts at most 11 distinct multisig signers and validates
+amounts as unsigned 64-bit base units.
+
+## Parse account state and extensions
+
+<Code>
+```python
+import base64
+
+from solathon import TOKEN_2022_PROGRAM_ID, parse_mint, parse_token_account
+
+mint_info = client.get_account_info(mint, encoding="base64")
+mint_data = base64.b64decode(mint_info.data[0], validate=True)
+mint_state = parse_mint(mint_data, program_id=TOKEN_2022_PROGRAM_ID)
+
+account_info = client.get_account_info(source_token_account, encoding="base64")
+account_data = base64.b64decode(account_info.data[0], validate=True)
+source_state = parse_token_account(
+    account_data,
+    program_id=TOKEN_2022_PROGRAM_ID,
+)
+```
+</Code>
+
+Known Token-2022 extensions expose a `TokenExtensionType`; unknown TLV type IDs
+are retained as raw `TLVExtension` records so newer on-chain state remains
+inspectable.
+
+<Callout type="warning">
+  The generic checked-transfer builder deliberately rejects transfer-fee and
+  transfer-hook extensions when their parsed state is supplied. Those
+  extensions require specialized instructions or extra account resolution.
+  Confidential-transfer, metadata, group, pausable, and other extension
+  workflows are parsed as TLV data but do not have high-level builders yet.
+  Solana Pay creation applies stricter checks as well: UI-transforming,
+  non-transferable, paused, and unknown extension state is rejected where a
+  basic payment cannot establish safe amount and transfer semantics.
+</Callout>
+
+## Query both token programs
+
+<Code>
+```python
+with Client(endpoint) as client:
+    accounts = client.get_all_token_accounts_by_owner(
+        owner,
+        commitment="confirmed",
+        encoding="jsonParsed",
+    )
+```
+</Code>
+
+This performs a JSON-RPC batch request against both token program IDs.

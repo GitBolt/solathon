@@ -1,0 +1,66 @@
+---
+title: Keypair
+description: Generate, import, export, and sign with Ed25519 Solana keypairs.
+---
+
+import { Callout } from 'nextra/components'
+import { Code } from '../../components/Code'
+
+# Keypair
+
+`Keypair` owns an Ed25519 signing key and its corresponding `PublicKey`.
+
+<Code>
+```python
+from solathon import Keypair
+
+keypair = Keypair()
+signature = keypair.sign(b"message").signature
+```
+</Code>
+
+The constructor generates a new keypair when called without an argument. It
+also accepts a 32-byte seed, a PyNaCl `SigningKey` or `PrivateKey`, or a
+`solders.keypair.Keypair`.
+
+## Import existing key material
+
+`from_private_key` accepts a base58 string or a 32-byte seed / canonical
+64-byte Solana keypair, supplied as bytes, a bytearray, or a list of integers.
+
+<Code>
+```python
+import os
+
+from solathon import Keypair
+
+from_base58 = Keypair.from_private_key(os.environ["SOLANA_PRIVATE_KEY"])
+from_solana_cli = Keypair.from_file("~/.config/solana/id.json")
+deterministic = Keypair.from_seed(bytes(range(32)))
+```
+</Code>
+
+<Callout type="warning">
+  Treat `private_key`, `bytes(keypair)`, and Solana CLI keypair files as
+  secrets. Never log or commit them.
+</Callout>
+
+## Interoperate with solders
+
+<Code>
+```python
+native_keypair = keypair.to_solders()
+same_keypair = Keypair.from_solders(native_keypair)
+```
+</Code>
+
+## Attributes
+
+- `public_key` is the immutable 32-byte `PublicKey`.
+- `private_key` is an immutable 64-byte `PrivateKey` containing the seed and
+  matching public key.
+- `key_pair` is the underlying PyNaCl `SigningKey`.
+
+`str(private_key)` and `repr(private_key)` are redacted. Use
+`bytes(keypair)`, `bytes(private_key)`, or `private_key.base58_encode()` only at
+an explicit secret export boundary.

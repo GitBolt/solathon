@@ -1,0 +1,114 @@
+---
+title: Solathon
+description: A modern Solana SDK for Python with synchronous and asynchronous RPC clients.
+---
+
+import { Callout } from 'nextra/components'
+import { Code } from '../components/Code'
+
+<div>
+  <h1 className="solathon-wordmark">Solathon</h1>
+  <div className="solathon-intro">
+    A fast, modern Solana SDK for Python, with type annotations and matching
+    synchronous and asynchronous clients.
+  </div>
+</div>
+
+<Code>
+```bash
+pip install solathon
+```
+</Code>
+
+<Callout type="info">
+  Solathon 2 requires Python 3.11 or newer. Versioned transactions use the
+  native `solders` implementation for Solana-compatible compilation and wire
+  encoding.
+</Callout>
+
+## Why Solathon?
+
+- **Complete RPC coverage.** Access current Solana HTTP RPC methods through a
+  consistent Python API.
+- **Sync and async.** `Client` and `AsyncClient` expose the same method surface
+  and support context managers for deterministic connection cleanup.
+- **Modern transactions.** Build legacy, v0 address-lookup-table, and v1
+  transaction messages.
+- **Token-ready.** Query the original Token Program and Token-2022, including
+  extension-aware account parsing.
+- **Solana Pay.** Encode, parse, create, and validate native SOL, classic SPL
+  Token, and basic Token-2022 payment requests; QR support is available through
+  the optional `qr` extra.
+
+## Read an account balance
+
+Clients return cleaned values by default. Pass `clean_response=False` when you
+need the full JSON-RPC envelope.
+
+<Code>
+```python
+from solathon import Client, PublicKey
+
+address = PublicKey("B3BhJ1nvPvEhx3hq3nfK8hx4WYcKZdbhavSobZEA44ai")
+
+with Client("https://api.devnet.solana.com") as client:
+    balance = client.get_balance(address)
+
+print(balance)  # lamports
+```
+</Code>
+
+## Send and confirm a transfer
+
+`send_and_confirm_transaction` tracks the transaction's last valid block
+height instead of relying only on a fixed wall-clock timeout.
+
+<Code>
+```python
+from solathon import Client, Keypair, PublicKey, Transaction
+from solathon.core.instructions import transfer
+
+sender = Keypair.from_file("~/.config/solana/id.json")
+receiver = PublicKey("B3BhJ1nvPvEhx3hq3nfK8hx4WYcKZdbhavSobZEA44ai")
+transaction = Transaction(
+    instructions=[
+        transfer(
+            from_public_key=sender.public_key,
+            to_public_key=receiver,
+            lamports=10_000,
+        )
+    ],
+    signers=[sender],
+)
+
+with Client("https://api.devnet.solana.com") as client:
+    signature = client.send_and_confirm_transaction(transaction)
+
+print(signature)
+```
+</Code>
+
+## Use the asynchronous client
+
+<Code>
+```python
+import asyncio
+
+from solathon import AsyncClient, PublicKey
+
+
+async def main() -> None:
+    address = PublicKey("B3BhJ1nvPvEhx3hq3nfK8hx4WYcKZdbhavSobZEA44ai")
+    async with AsyncClient("https://api.devnet.solana.com") as client:
+        print(await client.get_balance(address))
+
+
+asyncio.run(main())
+```
+</Code>
+
+<Callout type="warning">
+  Transaction v1 is implemented for forward compatibility, but it must only be
+  submitted to clusters that advertise v1 support. Continue using legacy or v0
+  transactions on clusters that do not.
+</Callout>

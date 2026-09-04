@@ -1,0 +1,33 @@
+---
+title: Parse URL
+description: Parse and validate a Solana Pay URL without losing amount precision.
+---
+
+import { Code } from '../../../components/Code'
+
+# Parse a URL
+
+<Code>
+```python
+def parse_url(url: str) -> TransactionRequestURL | TransferRequestURL: ...
+```
+</Code>
+
+<Code>
+```python
+from solathon.solana_pay import parse_url
+from solathon.solana_pay.types import TransactionRequestURL, TransferRequestURL
+
+request = parse_url(url)
+
+if isinstance(request, TransferRequestURL):
+    print(request.recipient, request.amount, request.reference)
+elif isinstance(request, TransactionRequestURL):
+    print(request.link)
+```
+</Code>
+
+Transfer amounts are returned as `Decimal`, references as `list[PublicKey]`,
+and optional fields as `None`. The parser rejects duplicate singleton fields,
+bad UTF-8 or percent escapes, URL fragments, invalid keys, scientific-notation
+amounts, and URLs longer than 2,048 characters.

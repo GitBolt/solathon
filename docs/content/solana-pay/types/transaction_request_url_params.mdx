@@ -1,0 +1,17 @@
+---
+title: Transaction Request URL Params
+---
+
+# Transaction Request URL Params
+
+The `TransactionRequestURLParams` input dictionary accepted by `encode_url`
+contains:
+
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `link` | `str` | Yes | Absolute HTTPS merchant endpoint without credentials or a fragment. |
+| `label` | `str` | No | Human-readable source of the request. |
+| `message` | `str` | No | Human-readable request description. |
+
+`parse_url` returns an immutable `TransactionRequestURL` dataclass with the
+same three attributes; missing optional values are `None`.

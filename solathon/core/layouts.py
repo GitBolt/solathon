@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from enum import IntEnum
-from struct import pack
-from typing import Any, Callable
+from typing import Any
 
 from ..publickey import PublicKey
 
@@ -20,98 +19,82 @@ class InstructionType(IntEnum):
     ALLOCATE_WITH_SEED = 9
     ASSIGN_WITH_SEED = 10
     TRANSFER_WITH_SEED = 11
+    UPGRADE_NONCE_ACCOUNT = 12
+    CREATE_ACCOUNT_ALLOW_PREFUND = 13
 
 
-SYSTEM_PROGRAM_ID: PublicKey = PublicKey("11111111111111111111111111111111")
+SYSTEM_PROGRAM_ID = PublicKey("11111111111111111111111111111111")
+SYSVAR_RECENT_BLOCKHASHES_ID = PublicKey("SysvarRecentB1ockHashes11111111111111111111")
+SYSVAR_RENT_ID = PublicKey("SysvarRent111111111111111111111111111111111")
 
 
-class Layout:
-    """Small encoder with the same build interface used by instruction helpers."""
-
-    def __init__(self, encoder: Callable[[Any], bytes]) -> None:
-        self.encoder = encoder
-
-    def build(self, value: Any) -> bytes:
-        """Encodes a layout value into its wire representation."""
-        return self.encoder(value)
+def encode_u32(value: int, field: str = "value") -> bytes:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise TypeError(f"{field} must be an integer")
+    if not 0 <= value < 2**32:
+        raise ValueError(f"{field} must fit in an unsigned 32-bit integer")
+    return value.to_bytes(4, "little")
 
 
-def _encode_public_key(value: bytes) -> bytes:
-    """Encodes and validates a public key."""
-    public_key = bytes(value)
-    if len(public_key) != PublicKey.LENGTH:
-        raise ValueError("Public key must contain 32 bytes")
-    return public_key
+def encode_u64(value: int, field: str = "value") -> bytes:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise TypeError(f"{field} must be an integer")
+    if not 0 <= value < 2**64:
+        raise ValueError(f"{field} must fit in an unsigned 64-bit integer")
+    return value.to_bytes(8, "little")
 
 
-def _encode_rust_string(value: str) -> bytes:
-    """Encodes a string using Solana's eight-byte length prefix."""
+def encode_string(value: str, field: str = "value") -> bytes:
+    if not isinstance(value, str):
+        raise TypeError(f"{field} must be a string")
     encoded = value.encode("utf-8")
-    return pack("<Q", len(encoded)) + encoded
+    return encode_u64(len(encoded), f"{field} length") + encoded
 
 
-PUBLIC_KEY_LAYOUT = Layout(_encode_public_key)
-RUST_STRING_LAYOUT = Layout(_encode_rust_string)
+def encode_system_instruction(instruction: InstructionType, **values: Any) -> bytes:
+    data = bytearray(encode_u32(int(instruction), "instruction"))
 
-CREATE_ACCOUNT_LAYOUT = Layout(
-    lambda args: pack("<QQ", args["lamports"], args["space"])
-    + _encode_public_key(args["program_id"])
-)
-ASSIGN_LAYOUT = Layout(lambda args: _encode_public_key(args["program_id"]))
-TRANFER_LAYOUT = Layout(lambda args: pack("<Q", args["lamports"]))
-CREATE_ACCOUNT_WTIH_SEED_LAYOUT = Layout(
-    lambda args: _encode_public_key(args["base"])
-    + _encode_rust_string(args["seed"])
-    + pack("<QQ", args["lamports"], args["space"])
-    + _encode_public_key(args["program_id"])
-)
-WITHDRAW_NONCE_ACCOUNT_LAYOUT = Layout(lambda args: pack("<Q", args["lamports"]))
-INITIALIZE_NONCE_ACCOUNT_LAYOUT = Layout(
-    lambda args: _encode_public_key(args["authorized"])
-)
-AUTHORIZE_NONCE_ACCOUNT_LAYOUT = Layout(
-    lambda args: _encode_public_key(args["authorized"])
-)
-ALLOCATE_LAYOUT = Layout(lambda args: pack("<Q", args["space"]))
-ALLOCATE_WITH_SEED_LAYOUT = Layout(
-    lambda args: _encode_public_key(args["base"])
-    + _encode_rust_string(args["seed"])
-    + pack("<Q", args["space"])
-    + _encode_public_key(args["program_id"])
-)
-ASSIGN_WITH_SEED_LAYOUT = Layout(
-    lambda args: _encode_public_key(args["base"])
-    + _encode_rust_string(args["seed"])
-    + _encode_public_key(args["program_id"])
-)
-TRANSFER_WITH_SEED_LAYOUT = Layout(
-    lambda args: pack("<Q", args["lamports"])
-    + _encode_rust_string(args["from_seed"])
-    + _encode_public_key(args.get("from_owner", args.get("from_ower")))
-)
+    if instruction == InstructionType.CREATE_ACCOUNT:
+        data.extend(encode_u64(values["lamports"], "lamports"))
+        data.extend(encode_u64(values["space"], "space"))
+        data.extend(bytes(values["program_id"]))
+    elif instruction == InstructionType.ASSIGN:
+        data.extend(bytes(values["program_id"]))
+    elif instruction == InstructionType.TRANSFER:
+        data.extend(encode_u64(values["lamports"], "lamports"))
+    elif instruction == InstructionType.CREATE_ACCOUNT_WITH_SEED:
+        data.extend(bytes(values["base"]))
+        data.extend(encode_string(values["seed"], "seed"))
+        data.extend(encode_u64(values["lamports"], "lamports"))
+        data.extend(encode_u64(values["space"], "space"))
+        data.extend(bytes(values["program_id"]))
+    elif instruction == InstructionType.WITHDRAW_NONCE_ACCOUNT:
+        data.extend(encode_u64(values["lamports"], "lamports"))
+    elif instruction in {
+        InstructionType.INITIALIZE_NONCE_ACCOUNT,
+        InstructionType.AUTHORIZE_NONCE_ACCOUNT,
+    }:
+        data.extend(bytes(values["authorized"]))
+    elif instruction == InstructionType.ALLOCATE:
+        data.extend(encode_u64(values["space"], "space"))
+    elif instruction == InstructionType.ALLOCATE_WITH_SEED:
+        data.extend(bytes(values["base"]))
+        data.extend(encode_string(values["seed"], "seed"))
+        data.extend(encode_u64(values["space"], "space"))
+        data.extend(bytes(values["program_id"]))
+    elif instruction == InstructionType.ASSIGN_WITH_SEED:
+        data.extend(bytes(values["base"]))
+        data.extend(encode_string(values["seed"], "seed"))
+        data.extend(bytes(values["program_id"]))
+    elif instruction == InstructionType.TRANSFER_WITH_SEED:
+        data.extend(encode_u64(values["lamports"], "lamports"))
+        data.extend(encode_string(values["from_seed"], "from_seed"))
+        data.extend(bytes(values["from_owner"]))
+    elif instruction == InstructionType.CREATE_ACCOUNT_ALLOW_PREFUND:
+        # When no payer is supplied, the destination must already contain the
+        # required lamports and the wire funding amount is zero.
+        data.extend(encode_u64(values["lamports"], "lamports"))
+        data.extend(encode_u64(values["space"], "space"))
+        data.extend(bytes(values["program_id"]))
 
-INSTRUCTION_LAYOUTS = {
-    InstructionType.CREATE_ACCOUNT: CREATE_ACCOUNT_LAYOUT,
-    InstructionType.ASSIGN: ASSIGN_LAYOUT,
-    InstructionType.TRANSFER: TRANFER_LAYOUT,
-    InstructionType.CREATE_ACCOUNT_WITH_SEED: CREATE_ACCOUNT_WTIH_SEED_LAYOUT,
-    InstructionType.WITHDRAW_NONCE_ACCOUNT: WITHDRAW_NONCE_ACCOUNT_LAYOUT,
-    InstructionType.INITIALIZE_NONCE_ACCOUNT: INITIALIZE_NONCE_ACCOUNT_LAYOUT,
-    InstructionType.AUTHORIZE_NONCE_ACCOUNT: AUTHORIZE_NONCE_ACCOUNT_LAYOUT,
-    InstructionType.ALLOCATE: ALLOCATE_LAYOUT,
-    InstructionType.ALLOCATE_WITH_SEED: ALLOCATE_WITH_SEED_LAYOUT,
-    InstructionType.ASSIGN_WITH_SEED: ASSIGN_WITH_SEED_LAYOUT,
-    InstructionType.TRANSFER_WITH_SEED: TRANSFER_WITH_SEED_LAYOUT,
-}
-
-
-def _encode_instruction(value: dict[str, Any]) -> bytes:
-    """Encodes a system instruction discriminator and arguments."""
-    instruction_type = InstructionType(value["type"])
-    data = pack("<I", instruction_type)
-    if instruction_type == InstructionType.ADVANCE_NONCE_ACCOUNT:
-        return data
-    return data + INSTRUCTION_LAYOUTS[instruction_type].build(value["args"])
-
-
-SYSTEM_INSTRUCTIONS_LAYOUT = Layout(_encode_instruction)
+    return bytes(data)

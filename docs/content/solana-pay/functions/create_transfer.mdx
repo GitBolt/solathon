@@ -1,0 +1,69 @@
+---
+title: Create Transfer
+description: Build a SOL, classic SPL Token, or basic Token-2022 transaction from Solana Pay fields.
+---
+
+import { Callout } from 'nextra/components'
+import { Code } from '../../../components/Code'
+
+# Create a Transfer
+
+<Code>
+```python
+def create_transfer(
+    client: Client,
+    sender: Keypair,
+    transfer_fields: CreateTransferFields,
+    commitment: Commitment | None = None,
+) -> Transaction: ...
+```
+</Code>
+
+Without `spl_token`, amounts are denominated in SOL. With a mint, amounts use
+that token's display units. Prefer `Decimal` or decimal text so conversion to
+lamports or token base units is exact.
+
+<Code>
+```python
+from decimal import Decimal
+
+from solathon import Client, Keypair, PublicKey
+from solathon.solana_pay import create_transfer
+
+sender = Keypair.from_file("~/.config/solana/id.json")
+fields = {
+    "recipient": PublicKey("mvines9iiHiQTysrwkJjGf2gb9Ex9jXJX8ns3qwf2kN"),
+    "amount": Decimal("0.01"),
+    "reference": [reference],
+    "memo": "order-1042",
+}
+
+with Client("https://api.devnet.solana.com") as client:
+    transaction = create_transfer(
+        client,
+        sender,
+        fields,
+        commitment="confirmed",
+    )
+    signature = client.send_transaction(transaction)
+```
+</Code>
+
+For native SOL, the helper validates the sender and any existing recipient as
+non-executable System Program accounts and checks the sender's lamport balance.
+For token payments, it validates the mint and both token accounts, including
+their program, mint, owner, state, and sender balance. Every path fetches a
+recent blockhash, places an optional memo immediately before the transfer, and
+places reference keys on the final transfer instruction.
+
+For a classic SPL Token or Token-2022 payment, include `"spl_token": mint` in
+`fields`. The recipient is the wallet owner from the Solana Pay URL—not an ATA.
+Solathon derives both associated token accounts, validates their mint, owner,
+state, and balance, and builds a checked transfer. Both ATAs must already exist.
+
+<Callout type="warning">
+  Basic Token-2022 transfers are supported. Creation rejects transfer-fee and
+  transfer-hook extensions, UI-transforming interest/scaled-amount mints,
+  non-transferable or paused state, and unknown extensions where their safety
+  cannot be established. These cases require extension-specific handling.
+</Callout>

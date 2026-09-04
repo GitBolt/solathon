@@ -1,0 +1,20 @@
+---
+title: Create Transfer Fields
+---
+
+# Create Transfer Fields
+
+`CreateTransferFields` is the typed dictionary accepted by `create_transfer`
+and `validate_transfer`.
+
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `recipient` | `PublicKey` | Yes | Recipient wallet owner (never an associated token account). |
+| `amount` | `Decimal \| int \| float \| str` | Yes | SOL without `spl_token`, or the mint's display unit with it. Prefer `Decimal` or text. |
+| `reference` | `Sequence[PublicKey] \| PublicKey` | No | Read-only reference keys attached to the transfer. |
+| `memo` | `str` | No | UTF-8 memo immediately before the transfer. |
+| `spl_token` | `PublicKey` | No | Classic SPL Token or basic Token-2022 mint. |
+
+SOL values must resolve to whole lamports. Token values must resolve to whole
+base units at the mint's decimal precision. Both must fit in an unsigned
+64-bit value.

@@ -1,0 +1,47 @@
+---
+title: Find Reference
+description: Find the oldest transaction indexed for a Solana Pay reference key.
+---
+
+import { Code } from '../../../components/Code'
+
+# Find a Reference
+
+<Code>
+```python
+def find_reference(
+    client: Client,
+    reference: PublicKey,
+    *,
+    commitment: Commitment | None = None,
+    limit: int = 1000,
+    before: str | None = None,
+    until: str | None = None,
+) -> TransactionSignature: ...
+```
+</Code>
+
+The helper paginates through address signatures and returns the oldest indexed
+signature for the reference.
+
+<Code>
+```python
+from solathon import Client, PublicKey
+from solathon.solana_pay import find_reference
+
+reference = PublicKey(reference_text)
+
+with Client("https://api.mainnet-beta.solana.com") as client:
+    found = find_reference(
+        client,
+        reference,
+        commitment="confirmed",
+    )
+
+print(found.signature)
+```
+</Code>
+
+`limit` must be between 1 and 1,000. `before` and `until` mirror the RPC
+pagination window; the helper walks backward within that window to its oldest
+result. `ValueError` is raised when the reference has no indexed signature.

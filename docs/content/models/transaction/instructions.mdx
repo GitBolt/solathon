@@ -1,0 +1,100 @@
+---
+title: Instructions
+description: System, memo, and compute-budget instructions for Solana transactions.
+---
+
+import { Callout } from 'nextra/components'
+import { Code } from '../../../components/Code'
+
+# Instructions
+
+An instruction identifies a program, its account metadata, and the bytes that
+the program will execute.
+
+<Code>
+```python
+from solathon.core.instructions import AccountMeta, Instruction
+
+instruction = Instruction(
+    keys=[AccountMeta(account, is_signer=True, is_writable=True)],
+    program_id=program_id,
+    data=b"program-specific bytes",
+)
+```
+</Code>
+
+## System Program helpers
+
+Import helpers explicitly from `solathon.core.instructions`:
+
+- `create_account(from_public_key, new_account_public_key, lamports, space, program_id)`
+- `create_account_with_seed(from_public_key, new_account_public_key, base_public_key, seed, lamports, space, program_id)`
+- `assign(account_public_key, program_id)` and
+  `assign_with_seed(account_public_key, base_public_key, seed, program_id)`
+- `transfer(from_public_key, to_public_key, lamports)` and
+  `transfer_with_seed(from_public_key, base_public_key, from_seed, from_owner, to_public_key, lamports)`
+- `allocate(account_public_key, space)` and
+  `allocate_with_seed(account_public_key, base_public_key, seed, space, program_id)`
+- `advance_nonce_account`, `withdraw_nonce_account`,
+  `initialize_nonce_account`, `authorize_nonce_account`, and
+  `upgrade_nonce_account`
+- `create_account_allow_prefund(new_account_public_key, lamports, space, program_id, payer_public_key=None)`
+
+`create_account_allow_prefund` requires a recent Agave runtime that supports
+System Program instruction 13. Check cluster support before submitting it.
+
+## Transfer example
+
+<Code>
+```python
+from solathon import Client, Keypair, PublicKey, Transaction
+from solathon.core.instructions import transfer
+
+sender = Keypair.from_file("~/.config/solana/id.json")
+recipient = PublicKey("B3BhJ1nvPvEhx3hq3nfK8hx4WYcKZdbhavSobZEA44ai")
+transaction = Transaction(
+    instructions=[transfer(sender.public_key, recipient, 10_000)],
+    signers=[sender],
+)
+
+with Client("https://api.devnet.solana.com") as client:
+    signature = client.send_and_confirm_transaction(
+        transaction,
+        commitment="confirmed",
+    )
+```
+</Code>
+
+## Memo Program
+
+<Code>
+```python
+from solathon.core.instructions import create_memo
+
+memo = create_memo("order-1042", signer_public_keys=[sender.public_key])
+```
+</Code>
+
+## Compute Budget Program
+
+<Code>
+```python
+from solathon.core import ComputeBudgetProgram
+
+compute_limit = ComputeBudgetProgram.set_compute_unit_limit(200_000)
+compute_price = ComputeBudgetProgram.set_compute_unit_price(1_000)
+loaded_data_limit = (
+    ComputeBudgetProgram.set_loaded_accounts_data_size_limit(128_000)
+)
+```
+</Code>
+
+For legacy and v0 transactions, `set_compute_unit_price` is measured in
+micro-lamports per compute unit.
+
+<Callout type="warning">
+  Do not put Compute Budget Program instructions in a v1 message: the v1
+  runtime ignores them. Set `compute_unit_limit`,
+  `loaded_accounts_data_size_limit`, and any priority fee on the v1
+  `TransactionConfig` instead.
+</Callout>

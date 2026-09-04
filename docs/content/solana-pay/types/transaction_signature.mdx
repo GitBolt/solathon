@@ -1,0 +1,17 @@
+---
+title: Transaction Signature
+---
+
+# Transaction Signature
+
+`find_reference` returns the standard RPC `TransactionSignature` model.
+
+| Attribute | Type |
+| --- | --- |
+| `signature` | `str` |
+| `slot` | `int` |
+| `err` | RPC error data or `None` |
+| `memo` | `str \| None` |
+| `block_time` | `int \| None` |
+| `confirmation_status` | `"processed" \| "confirmed" \| "finalized" \| None` |
+| `raw` | Original RPC dictionary |

@@ -43,59 +43,33 @@ We expect all contributors to act professionally and respectfully, and we expect
 
 To set up your development environment, follow these steps:
 
-1. Install Poetry (if not already installed):
+1. Install the Poetry version used by CI (the project uses Poetry 2's
+   PEP 621 metadata support):
 
     ```bash
-    pip install poetry
+    pip install poetry==2.4.2
     ```
 
 2. Clone the repository:
 
     ```bash
-    git clone https://github.com/SuperteamDAO/solathon.git
+    git clone https://github.com/GitBolt/solathon.git
     cd solathon
     ```
 
-3. Install project dependencies:
+3. Install the project, development tools, and optional QR dependencies:
 
     ```bash
-    poetry install
+    poetry install --with dev --all-extras
     ```
 
-4. Install development dependencies:
+4. Run the complete local quality gate:
 
     ```bash
-    poetry install --extras=dev
-    ```
-
-5. Run tests to ensure everything is set up correctly:
-
-    ```bash
+    poetry run ruff format --check .
+    poetry run ruff check .
     poetry run pytest
+    poetry run pip-audit
+    poetry check --lock
+    poetry build
     ```
-
-#### Alternatively: In case of any issues with the above steps
-1. Create a virtual environment(pip install venv, if you haven't already):
-   ```bash
-   python -m venv venv
-   ```
-
-2. Activate Virtual Environment:\
-   Mac/Linux
-   ```bash
-   source venv/bin/activate
-   ```
-   Windows
-    ```bash
-    .\venv\Scripts\activate
-    ```
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. Install dev dependencies:
-   ```bash
-   pip install -r requirements-dev.txt
-   ```
-
-

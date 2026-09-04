@@ -1,0 +1,58 @@
+---
+title: Fetch Transaction
+description: Fetch and validate a transaction from a Solana Pay transaction-request endpoint.
+---
+
+import { Code } from '../../../components/Code'
+
+# Fetch a Transaction Request
+
+<Code>
+```python
+def fetch_transaction(
+    client: Client,
+    account: PublicKey,
+    link: str,
+    commitment: Commitment | None = None,
+    *,
+    http_client: httpx.Client | None = None,
+) -> Transaction | VersionedTransaction: ...
+```
+</Code>
+
+The merchant link must be an absolute HTTPS URL without credentials or a
+fragment. Solathon rejects redirects, oversized responses, malformed base64,
+unexpected signers, and invalid existing signatures. It never signs the
+returned transaction.
+
+<Code>
+```python
+from solathon import Client, Keypair, Transaction
+from solathon.solana_pay import fetch_transaction
+
+wallet = Keypair.from_file("~/.config/solana/id.json")
+
+with Client(endpoint) as client:
+    transaction = fetch_transaction(
+        client,
+        account=wallet.public_key,
+        link="https://merchant.example/solana-pay",
+        commitment="confirmed",
+    )
+    message = (
+        transaction.serialize_message()
+        if isinstance(transaction, Transaction)
+        else transaction.message.serialize()
+    )
+    transaction.add_signature(
+        wallet.public_key,
+        wallet.sign(message).signature,
+    )
+    signature = client.send_raw_transaction(transaction.serialize())
+```
+</Code>
+
+The default payment-request transport is separate from the RPC transport. RPC
+provider API keys, cookies, and authorization headers are therefore not sent
+to a cross-origin merchant. Pass a dedicated `httpx.Client` through
+`http_client` when you need merchant-specific headers.

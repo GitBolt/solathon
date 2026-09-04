@@ -1,0 +1,75 @@
+---
+title: Utility Functions
+description: Exact unit conversion, signature verification, and raw RPC response handling.
+---
+
+import { Callout } from 'nextra/components'
+import { Code } from '../../components/Code'
+
+# Utility Functions
+
+## Lamports and SOL
+
+<Code>
+```python
+from decimal import Decimal
+
+from solathon.utils import (
+    lamport_to_sol,
+    lamport_to_sol_decimal,
+    sol_to_lamport,
+)
+
+lamport_to_sol(1_500_000_000)                  # 1.5 (float)
+lamport_to_sol_decimal(1_500_000_000)          # Decimal("1.5")
+sol_to_lamport(Decimal("1.500000001"))         # 1_500_000_001
+sol_to_lamport("1.500000001")                 # 1_500_000_001
+```
+</Code>
+
+`sol_to_lamport` rejects negative, non-finite, sub-lamport, and unsigned-64-bit
+overflow values rather than silently rounding them. Use the Decimal-returning
+conversion for accounting code.
+
+## Verify an Ed25519 signature
+
+<Code>
+```python
+from nacl.exceptions import BadSignatureError
+
+from solathon.utils import verify_signature
+
+try:
+    verify_signature(public_key, signature_bytes, message=b"sign-in challenge")
+except BadSignatureError:
+    raise PermissionError("invalid wallet signature")
+```
+</Code>
+
+`signature_bytes` may be bytes, a bytearray, or a sequence of byte values. If
+`message` is omitted, the public key's base58 bytes are verified for backward
+compatibility; authentication flows should pass an explicit, unique challenge.
+
+<Callout type="warning">
+  A signed static public key is replayable. Include a server nonce, intended
+  domain, purpose, and expiry in authentication challenges.
+</Callout>
+
+## Handle raw RPC envelopes
+
+Clients clean responses by default. When `clean_response=False`, use
+`unwrap_rpc_response` to raise structured `RPCRequestError` failures or
+`clean_response` to additionally strip a result's context/value wrapper.
+
+<Code>
+```python
+from solathon import Client
+from solathon.utils import clean_response, unwrap_rpc_response
+
+with Client(endpoint, clean_response=False) as client:
+    response = client.get_balance(address)
+
+result = unwrap_rpc_response(response)
+lamports = clean_response(response)
+```
+</Code>

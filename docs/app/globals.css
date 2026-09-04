@@ -1,0 +1,35 @@
+:root {
+  --solathon-accent: #6366f1;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.solathon-logo {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.625rem;
+  letter-spacing: -0.02em;
+}
+
+.solathon-wordmark {
+  background: linear-gradient(135deg, #ed7bff, #0085ff);
+  background-clip: text;
+  color: transparent;
+  font-size: clamp(2.5rem, 8vw, 4.75rem);
+  letter-spacing: -0.055em;
+  line-height: 1;
+  margin: 0;
+}
+
+.solathon-intro {
+  color: color-mix(in srgb, currentColor 72%, transparent);
+  font-size: 1.2rem;
+  line-height: 1.75;
+  max-width: 48rem;
+}

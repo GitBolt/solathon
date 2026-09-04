@@ -25,7 +25,7 @@ def test_compute_budget_values_must_fit_their_wire_types():
         ComputeBudgetProgram.set_compute_unit_limit(-1)
 
     with pytest.raises(ValueError):
-        ComputeBudgetProgram.set_compute_unit_price(2 ** 64)
+        ComputeBudgetProgram.set_compute_unit_price(2**64)
 
 
 def test_transfer_keeps_the_existing_system_instruction_encoding():

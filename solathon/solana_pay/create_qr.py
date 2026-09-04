@@ -1,52 +1,70 @@
-import qrcode
+from __future__ import annotations
+
 from io import BytesIO
-from PIL import Image
-from qrcode.image.styles.moduledrawers.pil import RoundedModuleDrawer
-import os
+from pathlib import Path
+from typing import Any, cast
 
-def create_qr(link: str, size: int = 10, background: str = 'white', color: str = 'black', border: int = 2) -> BytesIO:
+
+def create_qr(
+    link: str,
+    size: int = 10,
+    background: str = "white",
+    color: str = "black",
+    border: int = 4,
+) -> BytesIO:
+    """Render a branded PNG QR code.
+
+    Pillow and qrcode are imported only when this function is called so URL,
+    transfer, and RPC users do not pay the import or installation cost.
     """
-    Creates a QR code with the given link and returns it as a BytesIO object.
 
-    Args:
-        link (str): The link to be encoded in the QR code.
-        size (int): The size of the QR code.
-        background (str): The background color of the QR code.
-        color (str): The color of the QR code.
-        border (int): The border of the QR code.
+    try:
+        import qrcode
+        from PIL import Image
+        from qrcode.image.styles.moduledrawers.pil import RoundedModuleDrawer
+    except ImportError as error:  # pragma: no cover - depends on installation extra
+        raise ImportError(
+            "QR generation requires the optional dependencies; "
+            "install them with 'pip install solathon[qr]'"
+        ) from error
+    if not isinstance(link, str) or not link:
+        raise ValueError("link must be a non-empty string")
+    if not isinstance(size, int) or isinstance(size, bool) or size <= 0:
+        raise ValueError("size must be a positive integer")
+    if not isinstance(border, int) or isinstance(border, bool) or border < 0:
+        raise ValueError("border must be a non-negative integer")
 
-    """
     qr = qrcode.QRCode(
         box_size=size,
         border=border,
+        error_correction=qrcode.constants.ERROR_CORRECT_H,
     )
     qr.add_data(link)
     qr.make(fit=True)
+    image = cast(
+        Any,
+        qr.make_image(
+            fill_color=color,
+            back_color=background,
+            module_drawer=RoundedModuleDrawer(),
+        ),
+    ).convert("RGB")
 
-    img = qr.make_image(fill_color=color, back_color=background,
-                        module_drawer=RoundedModuleDrawer()).convert('RGB')
-
-
-    script_dir = os.path.dirname(os.path.realpath(__file__))
-    os.chdir(script_dir)
-    logo_path = os.path.join(script_dir, "qr-logo.png")
-    logo = Image.open(logo_path)
-    logo_size_percent = 20
-    logo_width = int(img.width * (logo_size_percent / 100))
-
-    wpercent = (logo_width/float(logo.size[0]))
-    hsize = int((float(logo.size[1])*float(wpercent)))
-    logo = logo.resize((logo_width, hsize))
-
-    pos = ((img.size[0] - logo.size[0]) // 2,
-           (img.size[1] - logo.size[1]) // 2)
-    img.paste(logo, pos)
-
-    img_pil = Image.new("RGB", img.size, background)
-    img_pil.paste(img)
-
-    img_bytes_io = BytesIO()
-    img_pil.save(img_bytes_io, format='PNG')
-    img_bytes_io.seek(0)
-
-    return img_bytes_io
+    logo_path = Path(__file__).with_name("qr-logo.png")
+    with Image.open(logo_path) as source_logo:
+        logo_width = int(image.width * 0.2)
+        logo_height = int(source_logo.height * logo_width / source_logo.width)
+        logo = source_logo.convert("RGBA").resize((logo_width, logo_height))
+    position = (
+        (image.width - logo.width) // 2,
+        (image.height - logo.height) // 2,
+    )
+    output = BytesIO()
+    try:
+        image.paste(logo, position, logo)
+        image.save(output, format="PNG")
+    finally:
+        logo.close()
+        image.close()
+    output.seek(0)
+    return output

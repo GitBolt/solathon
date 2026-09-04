@@ -1,0 +1,101 @@
+---
+title: AsyncClient
+description: Asynchronous access to the Solana HTTP JSON-RPC API.
+---
+
+import { Callout } from 'nextra/components'
+import { Code } from '../../components/Code'
+
+# AsyncClient
+
+`AsyncClient` is the asynchronous counterpart to `Client`. The public RPC
+surface and response modes match the synchronous client; each network method
+is awaited.
+
+<Code>
+```python
+class AsyncClient:
+    def __init__(
+        self,
+        endpoint: str,
+        local: bool = False,
+        clean_response: bool = True,
+        timeout: float = 30.0,
+        http_client: httpx.AsyncClient | None = None,
+    ): ...
+```
+</Code>
+
+Use `async with` to close Solathon's connection pool deterministically:
+
+<Code>
+```python
+import asyncio
+
+from solathon import AsyncClient, PublicKey
+
+
+async def main() -> None:
+    address = PublicKey("B3BhJ1nvPvEhx3hq3nfK8hx4WYcKZdbhavSobZEA44ai")
+    async with AsyncClient("https://api.mainnet-beta.solana.com") as client:
+        balance = await client.get_balance(address, commitment="confirmed")
+        print(balance)
+
+
+asyncio.run(main())
+```
+</Code>
+
+## Parallel independent requests
+
+Use `asyncio.gather` when calls are independent:
+
+<Code>
+```python
+async with AsyncClient(endpoint) as client:
+    balance, slot = await asyncio.gather(
+        client.get_balance(address),
+        client.get_slot(commitment="confirmed"),
+    )
+```
+</Code>
+
+## JSON-RPC batch requests
+
+Use `send_batch` when the RPC provider supports JSON-RPC batches and one HTTP
+round trip is preferable:
+
+<Code>
+```python
+async with AsyncClient(endpoint) as client:
+    balance, slot = await client.send_batch(
+        [
+            ("getBalance", [str(address)]),
+            ("getSlot", [{"commitment": "confirmed"}]),
+        ]
+    )
+```
+</Code>
+
+## Send and confirm
+
+<Code>
+```python
+async with AsyncClient(endpoint) as client:
+    signature = await client.send_and_confirm_transaction(
+        transaction,
+        commitment="confirmed",
+        poll_interval=0.5,
+    )
+```
+</Code>
+
+<Callout type="warning">
+  If the transaction already contains a recent blockhash, pass its matching
+  `last_valid_block_height`. For a durable-nonce transaction, provide a finite
+  `timeout` instead.
+</Callout>
+
+See the [Client documentation](/clients/client) for the full method catalog and
+the [canonical Solana HTTP RPC reference](https://solana.com/docs/rpc/http) for
+wire-level configuration details.

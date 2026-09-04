@@ -1,0 +1,48 @@
+---
+title: Create QR Code
+description: Render a Solana Pay URL as a PNG QR code.
+---
+
+import { Code } from '../../../components/Code'
+
+# Create a QR Code
+
+QR generation is an optional dependency so RPC-only installations stay small.
+
+<Code>
+```bash
+pip install "solathon[qr]"
+```
+</Code>
+
+<Code>
+```python
+def create_qr(
+    link: str,
+    size: int = 10,
+    background: str = "white",
+    color: str = "black",
+    border: int = 4,
+) -> BytesIO: ...
+```
+</Code>
+
+`size` is the number of pixels per QR module, not the final image dimensions.
+The four-module default border is the standard QR quiet zone, and high error
+correction protects readability around the centered Solathon logo. Use a light
+background and dark foreground for reliable wallet scanning.
+
+<Code>
+```python
+from solathon.solana_pay import create_qr, encode_url
+
+url = encode_url(recipient=recipient, amount="0.01", memo="order-1042")
+qr_image = create_qr(url)
+
+with open("solana-pay.png", "wb") as output:
+    output.write(qr_image.getvalue())
+```
+</Code>
+
+The returned `BytesIO` stream is positioned at byte zero and is ready for a
+web-framework response or file write.

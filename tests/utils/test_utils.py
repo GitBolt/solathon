@@ -1,75 +1,49 @@
+from decimal import Decimal
+
 import pytest
+
 from solathon import utils
 
 
-def get_rounded_expectation(arg):
-    return utils.truncate_float(arg * utils.SOL_PER_LAMPORT, utils.SOL_FLOATING_PRECISION)
+@pytest.mark.parametrize(
+    ("amount", "expected"),
+    [
+        (0, 0),
+        (1, 1_000_000_000),
+        (1.0, 1_000_000_000),
+        ("123.123", 123_123_000_000),
+        (Decimal("0.000000001"), 1),
+    ],
+)
+def test_sol_to_lamport_is_exact(amount, expected):
+    assert utils.sol_to_lamport(amount) == expected
 
 
-sol_to_lamport_test_data = [
-    (0, 0),
-    (0.0, 0),
-    (1.0, 1000000000),
-    (2.0, int(2 * utils.LAMPORT_PER_SOL)),
-    (99999.0, int(99999 * utils.LAMPORT_PER_SOL)),
-    (123.123, int(123.123 * utils.LAMPORT_PER_SOL)),
-    (123123123123.123123123123, int(123123123123.123123123123 * utils.LAMPORT_PER_SOL))
-]
-
-lamport_to_sol_test_data = [
-    (0, get_rounded_expectation(0)),
-    (1, get_rounded_expectation(1)),
-    (2, get_rounded_expectation(2)),
-    (999999999, get_rounded_expectation(999999999)),
-    (9999.999, get_rounded_expectation(9999.999)),
-]
-
-
-@pytest.mark.parametrize("arg, expected", sol_to_lamport_test_data)
-def test_sol_to_lamport(arg, expected):
-    actual = utils.sol_to_lamport(arg)
-    assert actual == expected
-    assert isinstance(actual, int)
-
-
-def test_sol_to_lamport_none_passed_in():
+@pytest.mark.parametrize("amount", [None, True, object()])
+def test_sol_to_lamport_rejects_non_numeric_values(amount):
     with pytest.raises(TypeError):
-        utils.sol_to_lamport(None)
+        utils.sol_to_lamport(amount)
 
 
-@pytest.mark.parametrize("arg, expected", [(-arg, -expected) for arg, expected in sol_to_lamport_test_data])
-def test_sol_to_lamport_negative_input(arg, expected):
-    actual = utils.sol_to_lamport(arg)
-    assert actual == expected
-    assert isinstance(actual, int)
+@pytest.mark.parametrize("amount", [-1, "nan", "inf", "0.0000000001"])
+def test_sol_to_lamport_rejects_invalid_values(amount):
+    with pytest.raises(ValueError):
+        utils.sol_to_lamport(amount)
 
 
-def test_sol_to_lamport_large_input():
-    i = 99999999999999999999999999999.99999999999999999999999999999999
-    assert utils.sol_to_lamport(i) == int(i * utils.LAMPORT_PER_SOL)
+def test_lamport_to_sol_has_exact_decimal_variant():
+    assert utils.lamport_to_sol(1_000_000_001) == 1.000000001
+    assert utils.lamport_to_sol_decimal(1_000_000_001) == Decimal("1.000000001")
 
 
-@pytest.mark.parametrize("arg, expected", lamport_to_sol_test_data)
-def test_lamport_to_sol(arg, expected):
-    actual = utils.lamport_to_sol(arg)
-    assert actual == expected
-    assert isinstance(actual, float)
-
-
-def test_lamport_to_sol_none_passed_in():
+@pytest.mark.parametrize("amount", [None, 1.5, True])
+def test_lamport_to_sol_requires_integer_lamports(amount):
     with pytest.raises(TypeError):
-        utils.lamport_to_sol(None)
+        utils.lamport_to_sol(amount)
 
 
-@pytest.mark.parametrize("arg, expected", [(-arg, -expected) for arg, expected in lamport_to_sol_test_data])
-def test_lamport_to_sol_negative_input(arg, expected):
-    actual = utils.lamport_to_sol(arg)
-    assert actual == expected
-    assert isinstance(actual, float)
-
-
-def test_lamport_to_sol_large_input():
-    arg = 99999999999999999999999999999999999999999
-    expected = get_rounded_expectation(arg)
-    assert utils.lamport_to_sol(arg) == expected
-    assert isinstance(expected, float)
+def test_lamport_values_must_fit_u64():
+    with pytest.raises(ValueError):
+        utils.lamport_to_sol(-1)
+    with pytest.raises(ValueError):
+        utils.sol_to_lamport(Decimal(2**64) / utils.LAMPORT_PER_SOL)
